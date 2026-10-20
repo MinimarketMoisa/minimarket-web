@@ -1,4 +1,4 @@
-﻿# Python
+# Python
 __pycache__/
 *.py[cod]
 *.pyo
@@ -24,3 +24,6 @@ env/
 .vscode/
 .idea/
 *.swp
+
+# Repositorios auxiliares
+minimarket-api/
