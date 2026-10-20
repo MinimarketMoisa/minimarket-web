@@ -10,7 +10,7 @@ Las tablas propias de Django (auth, sessions, admin, migrations) SI son
 gestionadas por Django mediante sus propias migraciones.
 """
 
-from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 from django.db import models
 
 
@@ -81,7 +81,7 @@ class Municipio(models.Model):
 # Usuario (AUTH_USER_MODEL)
 # Mapea la tabla "usuario" que ya existe en PostgreSQL creada por FastAPI.
 # ─────────────────────────────────────────────────────────────────────────────
-class Usuario(AbstractBaseUser, PermissionsMixin):
+class Usuario(AbstractBaseUser):
     id_usuario       = models.BigAutoField(primary_key=True)
     id_rol           = models.ForeignKey(
         Rol, on_delete=models.RESTRICT,
@@ -103,7 +103,7 @@ class Usuario(AbstractBaseUser, PermissionsMixin):
     USERNAME_FIELD  = "email"
     REQUIRED_FIELDS = ["nombre_completo"]
 
-    # Propiedades que Django Admin / PermissionsMixin necesitan
+    # Propiedades y metodos para Django Admin
     @property
     def is_active(self):
         return self.activo
@@ -111,6 +111,12 @@ class Usuario(AbstractBaseUser, PermissionsMixin):
     @is_active.setter
     def is_active(self, value):
         self.activo = value
+
+    def has_perm(self, perm, obj=None):
+        return self.is_superuser or self.is_staff
+
+    def has_module_perms(self, app_label):
+        return self.is_superuser or self.is_staff
 
     class Meta:
         managed    = False

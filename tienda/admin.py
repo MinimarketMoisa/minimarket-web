@@ -38,13 +38,14 @@ class UsuarioAdmin(UserAdmin):
     list_filter   = ("id_rol", "activo", "is_staff", "is_superuser", "email_verificado")
     search_fields = ("email", "nombre_completo")
     ordering      = ("email",)
+    filter_horizontal = ()
 
     # Campos al EDITAR un usuario existente
     fieldsets = (
         (None, {"fields": ("email", "password")}),
         ("Informacion personal", {"fields": ("nombre_completo", "telefono", "id_rol")}),
         ("Estado", {"fields": ("activo", "email_verificado")}),
-        ("Permisos Django", {"fields": ("is_staff", "is_superuser", "groups", "user_permissions")}),
+        ("Permisos", {"fields": ("is_staff", "is_superuser")}),
         ("Actividad", {"fields": ("last_login",)}),
     )
 
@@ -53,6 +54,10 @@ class UsuarioAdmin(UserAdmin):
         (None, {
             "classes": ("wide",),
             "fields": ("email", "nombre_completo", "id_rol", "password1", "password2"),
+        }),
+        ("Opciones", {
+            "classes": ("collapse",),
+            "fields": ("telefono", "activo", "email_verificado", "is_staff", "is_superuser"),
         }),
     )
 
