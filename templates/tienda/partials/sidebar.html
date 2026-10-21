@@ -1,0 +1,53 @@
+{% load static %}
+<aside class="sidebar">
+  <a class="sidebar-brand" href="{% if portal == 'admin' %}{% url 'tienda:admin-panel' %}{% else %}{% url 'tienda:empleado-panel' %}{% endif %}">
+    <img src="{% static 'tienda/logo-minimarket.png' %}" alt="MiniMarket">
+    <span>{% if portal == "admin" %}Administración{% else %}Sucursal{% endif %}</span>
+  </a>
+
+  <p class="sidebar-label">INICIO</p>
+  {% if portal == "admin" %}
+    <a class="sidebar-link {% if request.resolver_match.url_name == 'admin-panel' %}active{% endif %}" href="{% url 'tienda:admin-panel' %}">
+      <span class="sidebar-icon">◫</span> Resumen global
+    </a>
+  {% else %}
+    <a class="sidebar-link {% if request.resolver_match.url_name == 'empleado-panel' %}active{% endif %}" href="{% url 'tienda:empleado-panel' %}">
+      <span class="sidebar-icon">◫</span> Resumen de sucursal
+    </a>
+  {% endif %}
+
+  <p class="sidebar-label">OPERACIONES</p>
+  {% if portal == "admin" %}
+    <a class="sidebar-link {% if request.resolver_match.url_name == 'admin-pedidos' or request.resolver_match.url_name == 'admin-pedido-detalle' %}active{% endif %}" href="{% url 'tienda:admin-pedidos' %}"><span class="sidebar-icon">▤</span> Pedidos</a>
+    <a class="sidebar-link {% if request.resolver_match.url_name == 'admin-inventario' %}active{% endif %}" href="{% url 'tienda:admin-inventario' %}"><span class="sidebar-icon">▦</span> Inventario global</a>
+    <a class="sidebar-link {% if request.resolver_match.url_name == 'admin-sucursales' %}active{% endif %}" href="{% url 'tienda:admin-sucursales' %}"><span class="sidebar-icon">⌂</span> Sucursales</a>
+  {% else %}
+    <a class="sidebar-link {% if request.resolver_match.url_name == 'pedidos' or request.resolver_match.url_name == 'pedido-detalle' %}active{% endif %}" href="{% url 'tienda:pedidos' %}">
+      <span class="sidebar-icon">▤</span> Pedidos
+    </a>
+    <a class="sidebar-link {% if request.resolver_match.url_name == 'inventario' or request.resolver_match.url_name == 'inventario-editar' %}active{% endif %}" href="{% url 'tienda:inventario' %}">
+      <span class="sidebar-icon">▦</span> Inventario
+    </a>
+  {% endif %}
+
+  <p class="sidebar-label">CATÁLOGO</p>
+  {% if portal == "admin" %}
+    <a class="sidebar-link {% if request.resolver_match.url_name == 'admin-productos' %}active{% endif %}" href="{% url 'tienda:admin-productos' %}"><span class="sidebar-icon">□</span> Productos</a>
+    <a class="sidebar-link {% if request.resolver_match.url_name == 'admin-categorias' %}active{% endif %}" href="{% url 'tienda:admin-categorias' %}"><span class="sidebar-icon">▧</span> Categorías</a>
+  {% else %}
+    <a class="sidebar-link {% if request.resolver_match.url_name == 'empleado-productos' %}active{% endif %}" href="{% url 'tienda:empleado-productos' %}"><span class="sidebar-icon">□</span> Consultar productos</a>
+    <a class="sidebar-link {% if request.resolver_match.url_name == 'empleado-categorias' %}active{% endif %}" href="{% url 'tienda:empleado-categorias' %}"><span class="sidebar-icon">▧</span> Consultar categorías</a>
+  {% endif %}
+
+  {% if portal == "admin" %}
+    <p class="sidebar-label">ADMINISTRACIÓN</p>
+    <a class="sidebar-link {% if request.resolver_match.url_name == 'admin-usuarios' %}active{% endif %}" href="{% url 'tienda:admin-usuarios' %}"><span class="sidebar-icon">♙</span> Usuarios</a>
+  {% endif %}
+
+  <div class="sidebar-footer">
+    <form method="post" action="{% url 'tienda:empleado-logout' %}">
+      {% csrf_token %}
+      <button class="sidebar-link sidebar-logout" type="submit"><span class="sidebar-icon">↪</span> Cerrar sesión</button>
+    </form>
+  </div>
+</aside>

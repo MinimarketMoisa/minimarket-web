@@ -1,0 +1,31 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Administración global{% endblock %} | Minimarket</title>
+  <link rel="stylesheet" href="{% static 'tienda/empleado.css' %}">
+</head>
+<body>
+  <div class="app-shell">
+    {% include "tienda/partials/sidebar.html" with portal="admin" %}
+    <div class="app-main">
+      <header class="topbar">
+        <span>Administración global</span>
+        <span class="account-name">{{ user.nombre_completo }}</span>
+      </header>
+      <main class="container">
+        {% if messages %}
+          <section class="messages" aria-live="polite">
+            {% for message in messages %}
+              <p class="message {{ message.tags }}">{{ message }}</p>
+            {% endfor %}
+          </section>
+        {% endif %}
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+</body>
+</html>

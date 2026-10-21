@@ -1,6 +1,6 @@
 # Minimarket Web
 
-Panel administrativo y entorno web desarrollado en Django, disenado para compartir y operar sobre la misma base de datos PostgreSQL que el backend de FastAPI (minimarket-api).
+Portal de operaciones para empleados y panel administrativo en Django, disenado para compartir la base de datos PostgreSQL con el backend FastAPI.
 
 ---
 
@@ -60,8 +60,25 @@ Inicia el servidor de desarrollo en el puerto 8001:
 python manage.py runserver 8001
 ```
 
-Accede al panel de administracion en el navegador:
-http://127.0.0.1:8001/admin/
+Empleados y administradores comparten el acceso:
+http://127.0.0.1:8001/empleados/login/
+
+El sistema redirige a cada usuario según su rol: el empleado entra a su sucursal y el administrador a un resumen global independiente de las sucursales.
+
+El portal del empleado permite:
+* Ver pedidos pendientes y preparados de la sucursal.
+* Consultar el detalle de entrega y los productos de cada pedido.
+* Marcar pedidos como preparados o cancelarlos; al cancelar se devuelve el stock.
+* Confirmar pagos pendientes por transferencia.
+* Asignar o cambiar el repartidor de un pedido a domicilio.
+* Consultar y actualizar existencias y fechas de vencimiento de la sucursal.
+
+Las plantillas HTML del portal están separadas en `templates/tienda/empleado/`; sus estilos están en `tienda/static/tienda/`.
+El logo oficial y la paleta verde/naranja de MiniMarket se aplican al portal de personal, al panel global y a la consola Django.
+
+El portal de administración global presenta pedidos, pagos, repartidores, existencias y rendimiento de todas las sucursales. El menú lateral abre los módulos de Django para gestionar pedidos, inventario, productos, categorías, cuentas, empleados y sucursales usando los mismos modelos y permisos.
+
+Las pantallas de Django Admin conservan sus operaciones de alta, consulta, edición y eliminación, integradas con la navegación y el diseño del portal. El empleado ve las operaciones de su sucursal y consulta el catálogo sin permisos de edición.
 
 ---
 
@@ -82,4 +99,4 @@ http://127.0.0.1:8001/admin/
 * Modelos de negocio configurados con `managed = False`.
 * FastAPI administra el esquema de la base de datos (DDL).
 * Django lee y escribe directamente en la base de datos compartida en tiempo real.
-* Permisos de acceso segregados segun el rol del usuario (ADMIN y EMPLEADO con acceso restringido por sucursal).
+* El portal de empleados y el Admin Django aplican permisos por rol y restringen los datos de empleados a su sucursal.

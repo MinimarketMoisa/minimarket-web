@@ -8,6 +8,6 @@ admin.site.site_title  = "Minimarket"
 admin.site.index_title = "Panel de administracion"
 
 urlpatterns = [
+    path("", include("tienda.urls")),
     path("admin/", admin.site.urls),
-    path("api/", include("tienda.urls")),
 ]

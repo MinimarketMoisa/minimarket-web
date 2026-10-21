@@ -1,0 +1,58 @@
+{% extends "tienda/empleado/base.html" %}
+{% block title %}Resumen de sucursal{% endblock %}
+{% block content %}
+  <section class="page-heading">
+    <div>
+      <p class="eyebrow">PANEL DE OPERACIONES</p>
+      <h1>{{ sucursal.nombre }}</h1>
+      <p class="muted">{{ sucursal.direccion }}</p>
+    </div>
+  </section>
+
+  <section class="stats-grid">
+    <a class="stat-card" href="{% url 'tienda:pedidos' %}?estado=PENDIENTE">
+      <span class="stat-label">Por preparar</span>
+      <strong>{{ pedidos_pendientes }}</strong>
+      <span class="stat-foot">Pedidos pendientes</span>
+    </a>
+    <a class="stat-card" href="{% url 'tienda:pedidos' %}?estado=PREPARADO">
+      <span class="stat-label">Listos</span>
+      <strong>{{ pedidos_preparados }}</strong>
+      <span class="stat-foot">Preparados en sucursal</span>
+    </a>
+    <a class="stat-card" href="{% url 'tienda:inventario' %}?bajo=1">
+      <span class="stat-label">Atención</span>
+      <strong>{{ total_productos_bajos }}</strong>
+      <span class="stat-foot">Productos con 5 unidades o menos</span>
+    </a>
+  </section>
+
+  <section class="panel">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">INVENTARIO</p>
+        <h2>Existencias bajas</h2>
+      </div>
+      <a class="button secondary" href="{% url 'tienda:inventario' %}?bajo=1">Ver inventario</a>
+    </div>
+    {% if productos_bajos %}
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Producto</th><th>Existencias</th><th>Vencimiento</th><th></th></tr></thead>
+          <tbody>
+            {% for existencia in productos_bajos %}
+              <tr>
+                <td>{{ existencia.nombre }}</td>
+                <td><span class="stock low">{{ existencia.stock_disponible }}</span></td>
+                <td>{{ existencia.fecha_vencimiento|default:"—" }}</td>
+                <td><a href="{% url 'tienda:inventario-editar' existencia.pk %}">Actualizar</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty">No hay existencias bajas que requieran atención.</p>
+    {% endif %}
+  </section>
+{% endblock %}

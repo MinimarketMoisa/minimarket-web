@@ -1,0 +1,58 @@
+{% extends "tienda/empleado/base.html" %}
+{% block title %}Pedidos de sucursal{% endblock %}
+{% block content %}
+  <section class="page-heading">
+    <div>
+      <p class="eyebrow">OPERACIONES</p>
+      <h1>Pedidos de sucursal</h1>
+      <p class="muted">Pedidos pendientes y preparados para gestionar.</p>
+    </div>
+  </section>
+  <form method="get" class="filter-bar">
+    <label class="field compact">
+      <span>Buscar pedido o cliente</span>
+      <input type="search" name="q" value="{{ busqueda }}" placeholder="N.º de pedido o nombre">
+    </label>
+    <label class="field compact">
+      <span>Estado</span>
+      <select name="estado">
+        <option value="">Todos</option>
+        <option value="PENDIENTE" {% if estado_filtro == "PENDIENTE" %}selected{% endif %}>Pendiente</option>
+        <option value="PREPARADO" {% if estado_filtro == "PREPARADO" %}selected{% endif %}>Preparado</option>
+      </select>
+    </label>
+    <button class="button primary" type="submit">Filtrar</button>
+  </form>
+  <section class="panel">
+    {% if pedidos %}
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Pedido</th><th>Cliente</th><th>Fecha</th><th>Entrega</th><th>Pago</th><th>Estado</th><th>Total</th><th></th></tr></thead>
+          <tbody>
+            {% for pedido in pedidos %}
+              <tr>
+                <td><strong>#{{ pedido.id_pedido }}</strong></td>
+                <td>{{ pedido.id_cliente.nombre_completo }}</td>
+                <td>{{ pedido.fecha_creacion|date:"d/m/Y H:i" }}</td>
+                <td>{{ pedido.get_tipo_entrega_display }}</td>
+                <td>{{ pedido.get_estado_pago_display }}</td>
+                <td><span class="badge {{ pedido.estado|lower }}">{{ pedido.get_estado_display }}</span></td>
+                <td>$ {{ pedido.total|floatformat:2 }}</td>
+                <td><a class="button small secondary" href="{% url 'tienda:pedido-detalle' pedido.id_pedido %}">Gestionar</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if pedidos.has_other_pages %}
+        <nav class="pagination" aria-label="Paginación">
+          {% if pedidos.has_previous %}<a href="?q={{ busqueda|urlencode }}&estado={{ estado_filtro }}&page={{ pedidos.previous_page_number }}">Anterior</a>{% endif %}
+          <span>Página {{ pedidos.number }} de {{ pedidos.paginator.num_pages }}</span>
+          {% if pedidos.has_next %}<a href="?q={{ busqueda|urlencode }}&estado={{ estado_filtro }}&page={{ pedidos.next_page_number }}">Siguiente</a>{% endif %}
+        </nav>
+      {% endif %}
+    {% else %}
+      <p class="empty">No hay pedidos para mostrar con estos filtros.</p>
+    {% endif %}
+  </section>
+{% endblock %}

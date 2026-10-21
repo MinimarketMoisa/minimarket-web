@@ -1,0 +1,30 @@
+{% extends base_template %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+  <div class="breadcrumbs"><a href="{{ cancel_url }}">Volver al listado</a><span>/</span><span>{{ title }}</span></div>
+  <section class="page-heading">
+    <div>
+      <p class="eyebrow">GESTIÓN DEL PORTAL</p>
+      <h1>{{ title }}</h1>
+      {% if description %}<p class="muted">{{ description }}</p>{% endif %}
+    </div>
+  </section>
+  <section class="panel portal-form-panel">
+    <form method="post" class="form-stack" novalidate>
+      {% csrf_token %}
+      {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
+      {% for field in form %}
+        <div class="field">
+          {{ field.label_tag }}
+          {{ field }}
+          {% if field.help_text %}<span class="muted">{{ field.help_text }}</span>{% endif %}
+          {% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+        </div>
+      {% endfor %}
+      <div class="form-actions">
+        <button class="button primary" type="submit">{{ submit_label }}</button>
+        <a class="button secondary" href="{{ cancel_url }}">Cancelar</a>
+      </div>
+    </form>
+  </section>
+{% endblock %}

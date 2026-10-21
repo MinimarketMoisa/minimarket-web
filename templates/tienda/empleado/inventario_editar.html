@@ -1,0 +1,24 @@
+{% extends "tienda/empleado/base.html" %}
+{% block title %}Actualizar inventario{% endblock %}
+{% block content %}
+  <div class="breadcrumbs"><a href="{% url 'tienda:inventario' %}">Inventario</a><span>/</span><span>Actualizar</span></div>
+  <section class="form-card">
+    <p class="eyebrow">ACTUALIZAR EXISTENCIAS</p>
+    <h1>{{ producto.nombre }}</h1>
+    {% if producto.codigo_barras %}<p class="muted">Código: {{ producto.codigo_barras }}</p>{% endif %}
+    <form method="post" class="form-stack">
+      {% csrf_token %}
+      {% for field in form %}
+        <label class="field">
+          <span>{{ field.label }}</span>
+          {{ field }}
+          {% if field.errors %}<small class="field-error">{{ field.errors|striptags }}</small>{% endif %}
+        </label>
+      {% endfor %}
+      <div class="form-actions">
+        <button class="button primary" type="submit">Guardar cambios</button>
+        <a class="button secondary" href="{% url 'tienda:inventario' %}">Volver</a>
+      </div>
+    </form>
+  </section>
+{% endblock %}

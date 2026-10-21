@@ -1,0 +1,18 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block title %}{{ title }} | Minimarket{% endblock %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'tienda/admin-brand.css' %}">
+{% endblock %}
+
+{% block branding %}
+  <h1 id="site-name">
+    <a href="{% if user.id_rol.nombre == 'ADMIN' or user.is_superuser %}{% url 'tienda:admin-panel' %}{% else %}{% url 'tienda:empleado-panel' %}{% endif %}">
+      <img src="{% static 'tienda/logo-minimarket.png' %}" alt="MiniMarket">
+      <span>Gestión de datos</span>
+    </a>
+  </h1>
+{% endblock %}

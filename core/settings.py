@@ -27,7 +27,7 @@ INSTALLED_APPS = [
     # Admin personalizado (cargado primero para poder sobreescribir templates)
     "tienda.apps.TiendaConfig",
     # Django core
-    "django.contrib.admin",
+    "tienda.apps.MinimarketAdminConfig",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",

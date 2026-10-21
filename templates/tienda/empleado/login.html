@@ -1,0 +1,25 @@
+{% extends "tienda/empleado/base.html" %}
+{% block title %}Acceso al sistema{% endblock %}
+{% block content %}
+  <section class="login-wrap">
+    <div class="login-card">
+      <p class="eyebrow">MINIMARKET · OPERACIONES</p>
+      <h1>Acceso al sistema</h1>
+      <p class="muted">Ingresa con tu cuenta de empleado o administrador.</p>
+      <form method="post" class="form-stack">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+          <div class="form-errors">{{ form.non_field_errors }}</div>
+        {% endif %}
+        {% for field in form %}
+          <label class="field">
+            <span>{{ field.label }}</span>
+            {{ field }}
+            {% if field.errors %}<small class="field-error">{{ field.errors|striptags }}</small>{% endif %}
+          </label>
+        {% endfor %}
+        <button class="button primary full" type="submit">Iniciar sesión</button>
+      </form>
+    </div>
+  </section>
+{% endblock %}

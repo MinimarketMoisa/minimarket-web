@@ -1,0 +1,96 @@
+{% extends "tienda/empleado/base.html" %}
+{% block title %}Pedido #{{ pedido.id_pedido }}{% endblock %}
+{% block content %}
+  <div class="breadcrumbs"><a href="{% url 'tienda:pedidos' %}">Pedidos</a><span>/</span><span>#{{ pedido.id_pedido }}</span></div>
+  <section class="page-heading">
+    <div>
+      <p class="eyebrow">DETALLE DEL PEDIDO</p>
+      <h1>Pedido #{{ pedido.id_pedido }}</h1>
+      <p class="muted">Creado el {{ pedido.fecha_creacion|date:"d/m/Y H:i" }}</p>
+    </div>
+    <span class="badge {{ pedido.estado|lower }}">{{ pedido.get_estado_display }}</span>
+  </section>
+
+  <div class="detail-grid">
+    <section class="panel">
+      <div class="section-heading"><h2>Productos</h2><span>{{ pedido.detalles.count }} artículos</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Producto</th><th>Cantidad</th><th>Precio</th><th>Subtotal</th></tr></thead>
+          <tbody>
+            {% for detalle in pedido.detalles.all %}
+              <tr>
+                <td>{{ detalle.id_producto.nombre }}</td>
+                <td>{{ detalle.cantidad }}</td>
+                <td>$ {{ detalle.precio_unitario|floatformat:2 }}</td>
+                <td>$ {{ detalle.subtotal|floatformat:2 }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot><tr><th colspan="3">Envío</th><td>$ {{ pedido.costo_envio|floatformat:2 }}</td></tr><tr><th colspan="3">Total</th><td><strong>$ {{ pedido.total|floatformat:2 }}</strong></td></tr></tfoot>
+        </table>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <p class="eyebrow">CLIENTE</p>
+      <h2>{{ pedido.id_cliente.nombre_completo }}</h2>
+      <p>{{ pedido.id_cliente.email }}</p>
+      <p>{{ pedido.id_cliente.telefono|default:"Sin teléfono registrado" }}</p>
+      <hr>
+      <p class="eyebrow">ENTREGA</p>
+      <p><strong>{{ pedido.get_tipo_entrega_display }}</strong></p>
+      {% if direccion %}
+        <p>{{ direccion.detalle_direccion }}</p>
+        {% if direccion.punto_referencia %}<p class="muted">Referencia: {{ direccion.punto_referencia }}</p>{% endif %}
+        <p class="muted">{{ direccion.id_municipio.nombre }}</p>
+      {% elif pedido.tipo_entrega == "DOMICILIO" %}
+        <p class="muted">No se encontró la dirección guardada para este pedido.</p>
+      {% endif %}
+      <hr>
+      <p class="eyebrow">REPARTIDOR</p>
+      {% if pedido.id_repartidor %}
+        <p>{{ pedido.id_repartidor.id_repartidor.nombre_completo }} · {{ pedido.id_repartidor.id_repartidor.telefono|default:"Sin teléfono" }}</p>
+      {% else %}
+        <p class="muted">Sin repartidor asignado</p>
+      {% endif %}
+    </aside>
+  </div>
+
+  <section class="panel actions-panel">
+    <div class="section-heading"><div><p class="eyebrow">ACCIONES</p><h2>Gestionar pedido</h2></div></div>
+    <div class="actions-grid">
+      {% if pedido.estado == "PENDIENTE" %}
+        <form method="post" action="{% url 'tienda:pedido-accion' pedido.id_pedido %}">
+          {% csrf_token %}<input type="hidden" name="accion" value="preparar">
+          <button class="button primary" type="submit">Marcar como preparado</button>
+        </form>
+      {% endif %}
+      {% if pedido.metodo_pago == "TRANSFERENCIA" and pedido.estado_pago == "PENDIENTE" %}
+        <form method="post" action="{% url 'tienda:pedido-accion' pedido.id_pedido %}">
+          {% csrf_token %}<input type="hidden" name="accion" value="pagar">
+          <button class="button secondary" type="submit">Confirmar transferencia</button>
+        </form>
+      {% endif %}
+      {% if pedido.tipo_entrega == "DOMICILIO" %}
+        <form method="post" action="{% url 'tienda:pedido-accion' pedido.id_pedido %}" class="assign-form">
+          {% csrf_token %}<input type="hidden" name="accion" value="asignar_repartidor">
+          <label class="field compact">
+            <span>Repartidor disponible</span>
+            <select name="id_repartidor" required>
+              <option value="">Seleccionar</option>
+              {% for perfil in repartidores %}
+                <option value="{{ perfil.pk }}">{{ perfil.id_repartidor.nombre_completo }}{% if perfil.id_repartidor.telefono %} · {{ perfil.id_repartidor.telefono }}{% endif %}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <button class="button secondary" type="submit">Asignar repartidor</button>
+        </form>
+      {% endif %}
+      <form method="post" action="{% url 'tienda:pedido-accion' pedido.id_pedido %}" onsubmit="return confirm('¿Cancelar el pedido y devolver sus productos al inventario?');">
+        {% csrf_token %}<input type="hidden" name="accion" value="cancelar">
+        <button class="button danger" type="submit">Cancelar pedido</button>
+      </form>
+    </div>
+  </section>
+{% endblock %}

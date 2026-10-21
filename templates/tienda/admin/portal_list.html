@@ -1,0 +1,61 @@
+{% extends base_template %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+  <section class="page-heading">
+    <div>
+      <p class="eyebrow">GESTIÓN DEL PORTAL</p>
+      <h1>{{ title }}</h1>
+      {% if description %}<p class="muted">{{ description }}</p>{% endif %}
+    </div>
+    {% if create_url %}<a class="button primary" href="{{ create_url }}">Agregar</a>{% endif %}
+  </section>
+
+  <section class="panel">
+    <form method="get" class="filter-bar">
+      <label class="field">
+        <span>Buscar</span>
+        <input type="search" name="q" value="{{ busqueda }}" placeholder="Escribe para filtrar">
+      </label>
+      <button class="button secondary" type="submit">Buscar</button>
+      {% if busqueda %}<a class="button secondary" href="?">Limpiar</a>{% endif %}
+    </form>
+    {% if items %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              {% for column in columns %}<th>{{ column }}</th>{% endfor %}
+              {% if items.0.url or items.0.action_url or items.0.delete_url %}<th>Acciones</th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in items %}
+              <tr>
+                {% for cell in item.cells %}<td>{{ cell }}</td>{% endfor %}
+                {% if item.url or item.action_url or item.delete_url %}
+                  <td class="portal-actions">
+                    {% if item.url %}<a class="button secondary small" href="{{ item.url }}">{{ item.label|default:"Ver" }}</a>{% endif %}
+                    {% if item.action_url %}
+                      <form method="post" action="{{ item.action_url }}">
+                        {% csrf_token %}
+                        <button class="button secondary small" type="submit">{{ item.action_label }}</button>
+                      </form>
+                    {% endif %}
+                    {% if item.delete_url %}
+                      <form method="post" action="{{ item.delete_url }}" onsubmit="return confirm('¿Confirmas esta eliminación?');">
+                        {% csrf_token %}
+                        <button class="button danger small" type="submit">Eliminar</button>
+                      </form>
+                    {% endif %}
+                  </td>
+                {% endif %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty">No hay registros para mostrar.</p>
+    {% endif %}
+  </section>
+{% endblock %}

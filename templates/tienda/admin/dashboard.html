@@ -1,0 +1,104 @@
+{% extends "tienda/admin/base.html" %}
+{% block title %}Resumen global{% endblock %}
+{% block content %}
+  <section class="page-heading">
+    <div>
+      <p class="eyebrow">VISTA GENERAL · {{ hoy|date:"d/m/Y" }}</p>
+      <h1>Operación de Minimarket</h1>
+      <p class="muted">Resumen consolidado de todas las sucursales.</p>
+    </div>
+  </section>
+
+  <section class="stats-grid">
+    <article class="stat-card">
+      <span class="stat-label">Ventas entregadas</span>
+      <strong>$ {{ ventas_entregadas|floatformat:2 }}</strong>
+      <span class="stat-foot">Total histórico, todos los locales</span>
+    </article>
+    <article class="stat-card">
+      <span class="stat-label">Pedidos de hoy</span>
+      <strong>{{ pedidos_hoy }}</strong>
+      <span class="stat-foot">De {{ total_pedidos }} pedidos registrados</span>
+    </article>
+    <article class="stat-card">
+      <span class="stat-label">Pendientes de preparación</span>
+      <strong>{{ pendientes }}</strong>
+      <span class="stat-foot">{{ preparados }} preparados · {{ en_ruta }} en ruta</span>
+    </article>
+    <article class="stat-card">
+      <span class="stat-label">Pagos pendientes</span>
+      <strong>{{ pagos_pendientes }}</strong>
+      <span class="stat-foot">Pedidos aún sin pago confirmado</span>
+    </article>
+    <article class="stat-card">
+      <span class="stat-label">Existencias bajas</span>
+      <strong>{{ inventario_bajo }}</strong>
+      <span class="stat-foot">Registros con 5 unidades o menos</span>
+    </article>
+    <article class="stat-card">
+      <span class="stat-label">Repartidores libres</span>
+      <strong>{{ repartidores_libres }}</strong>
+      <span class="stat-foot">Disponibles en toda la operación</span>
+    </article>
+  </section>
+
+  <section class="panel">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">ACCESO DIRECTO</p>
+        <h2>Gestión del sistema</h2>
+      </div>
+    </div>
+    <div class="admin-shortcuts">
+      <a class="shortcut-card" href="{% url 'tienda:admin-pedidos' %}"><strong>Pedidos</strong><span class="muted">Consultar y gestionar el historial</span></a>
+      <a class="shortcut-card" href="{% url 'tienda:admin-sucursales' %}"><strong>Sucursales</strong><span class="muted">Crear, editar y desactivar locales</span></a>
+      <a class="shortcut-card" href="{% url 'tienda:admin-inventario' %}"><strong>Inventario</strong><span class="muted">Existencias por sucursal</span></a>
+      <a class="shortcut-card" href="{% url 'tienda:admin-productos' %}"><strong>Productos</strong><span class="muted">Gestionar el catálogo global</span></a>
+      <a class="shortcut-card" href="{% url 'tienda:admin-categorias' %}"><strong>Categorías</strong><span class="muted">Organizar productos</span></a>
+      <a class="shortcut-card" href="{% url 'tienda:admin-usuarios' %}"><strong>Usuarios</strong><span class="muted">Cuentas, roles y sucursales</span></a>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">COBERTURA NACIONAL</p>
+        <h2>Rendimiento por sucursal</h2>
+      </div>
+      <span class="muted">{{ sucursales|length }} sucursales</span>
+    </div>
+    {% if sucursales %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Sucursal</th>
+              <th>Estado</th>
+              <th>Pedidos</th>
+              <th>Pendientes</th>
+              <th>Preparados</th>
+              <th>En ruta</th>
+              <th>Ventas entregadas</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for sucursal in sucursales %}
+              <tr>
+                <td><strong>{{ sucursal.nombre }}</strong><br><small class="muted">{{ sucursal.direccion }}</small></td>
+                <td>{% if sucursal.activa %}<span class="badge">Activa</span>{% else %}<span class="badge cancelado">Inactiva</span>{% endif %}</td>
+                <td>{{ sucursal.total_pedidos }}</td>
+                <td>{{ sucursal.pedidos_pendientes }}</td>
+                <td>{{ sucursal.pedidos_preparados }}</td>
+                <td>{{ sucursal.pedidos_en_ruta }}</td>
+                <td>$ {{ sucursal.ventas_entregadas|default:0|floatformat:2 }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty">Todavía no hay sucursales registradas.</p>
+    {% endif %}
+  </section>
+
+{% endblock %}

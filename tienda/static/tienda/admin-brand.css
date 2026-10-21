@@ -1,0 +1,117 @@
+:root {
+  --primary: #9caa17;
+  --secondary: #f67300;
+  --accent: #f67300;
+  --header-bg: #fff;
+  --header-color: #273226;
+  --link-fg: #707d0c;
+  --link-hover-color: #cf5e00;
+  --link-selected-fg: #cf5e00;
+  --button-bg: #c8e89a;
+  --button-hover-bg: #b6dc7c;
+  --default-button-bg: #c8e89a;
+  --default-button-hover-bg: #b6dc7c;
+}
+
+#header {
+  border-bottom: 3px solid #f67300;
+  box-shadow: 0 2px 10px #26361b12;
+}
+
+#site-name {
+  margin: 0;
+}
+
+#site-name a {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  color: #273226;
+}
+
+#site-name img {
+  display: block;
+  width: 190px;
+  height: auto;
+}
+
+#site-name span {
+  color: #707d0c;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.module caption,
+.inline-group h2 {
+  background: #9caa17;
+}
+
+.button,
+input[type="submit"],
+input[type="button"],
+.submit-row input,
+a.button {
+  background: #c8e89a;
+  color: #273226;
+  transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease, color .16s ease, transform .16s ease;
+}
+
+.button:hover,
+input[type="submit"]:hover,
+input[type="button"]:hover,
+.submit-row input:hover,
+a.button:hover {
+  background: #b6dc7c;
+  color: #273226;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px #183a2b1a;
+}
+
+.submit-row a.closelink {
+  border: 1px solid #d6e1db;
+  border-radius: 8px;
+  background: #fff;
+  color: #315347;
+  transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease, color .16s ease, transform .16s ease;
+}
+
+.submit-row a.closelink:hover,
+.submit-row a.closelink:focus-visible,
+.submit-row a.closelink:active {
+  border-color: #c8e89a;
+  background: #c8e89a;
+  color: #273226;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px #183a2b1a;
+}
+
+.submit-row input:active,
+.submit-row a.closelink:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.submit-row input:focus-visible,
+.submit-row a.closelink:focus-visible {
+  outline: 3px solid #9caa1740;
+  outline-offset: 2px;
+}
+
+input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #9caa17;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+@media (max-width: 767px) {
+  #site-name img {
+    width: 145px;
+  }
+
+  #site-name span {
+    font-size: 13px;
+  }
+}
