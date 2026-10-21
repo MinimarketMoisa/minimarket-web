@@ -817,6 +817,7 @@ def accion_pedido(request: HttpRequest, id_pedido: int) -> HttpResponse:
                 request,
                 f"El pedido #{pedido.id_pedido} fue cancelado y el inventario fue actualizado.",
             )
+            return redirect("tienda:pedidos")
 
         elif accion == "asignar_repartidor":
             _asignar_repartidor(request, pedido)
