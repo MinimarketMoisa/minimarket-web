@@ -1,24 +1,34 @@
-{% extends base_template %}
+{% extends base_template|default:"tienda/admin/base.html" %}
 {% block title %}{{ title }}{% endblock %}
 {% block content %}
   <section class="page-heading">
     <div>
       <p class="eyebrow">GESTIÓN DEL PORTAL</p>
       <h1>{{ title }}</h1>
-      {% if description %}<p class="muted">{{ description }}</p>{% endif %}
+      {% if description %}<p class="muted text-sm">{{ description }}</p>{% endif %}
     </div>
-    {% if create_url %}<a class="button primary" href="{{ create_url }}">Agregar</a>{% endif %}
+    <div class="flex items-center gap-3">
+      {% if total_registros is not None %}
+        <span class="badge">{{ total_registros }} registro{{ total_registros|pluralize:"s" }}</span>
+      {% else %}
+        <span class="badge">{{ items|length }} registro{{ items|length|pluralize:"s" }}</span>
+      {% endif %}
+      {% if create_url %}<a class="button primary" href="{{ create_url }}">+ Agregar</a>{% endif %}
+    </div>
   </section>
 
   <section class="panel">
-    <form method="get" class="filter-bar">
+    <form method="get" class="filter-bar bg-mm-canvas/50">
       <label class="field">
         <span>Buscar</span>
-        <input type="search" name="q" value="{{ busqueda }}" placeholder="Escribe para filtrar">
+        <input type="search" name="q" value="{{ busqueda }}" placeholder="Escribe para filtrar registros...">
       </label>
-      <button class="button secondary" type="submit">Buscar</button>
-      {% if busqueda %}<a class="button secondary" href="?">Limpiar</a>{% endif %}
+      <div class="flex gap-2">
+        <button class="button secondary" type="submit">Buscar</button>
+        {% if busqueda %}<a class="button secondary" href="?">Limpiar</a>{% endif %}
+      </div>
     </form>
+
     {% if items %}
       <div class="table-wrap">
         <table>
@@ -31,10 +41,14 @@
           <tbody>
             {% for item in items %}
               <tr>
-                {% for cell in item.cells %}<td>{{ cell }}</td>{% endfor %}
+                {% for cell in item.cells %}
+                  <td class="{% if forloop.first %}font-semibold text-mm-ink{% endif %}">{{ cell }}</td>
+                {% endfor %}
                 {% if item.url or item.action_url or item.delete_url %}
                   <td class="portal-actions">
-                    {% if item.url %}<a class="button secondary small" href="{{ item.url }}">{{ item.label|default:"Ver" }}</a>{% endif %}
+                    {% if item.url %}
+                      <a class="button secondary small" href="{{ item.url }}">{{ item.label|default:"Ver" }}</a>
+                    {% endif %}
                     {% if item.action_url %}
                       <form method="post" action="{{ item.action_url }}">
                         {% csrf_token %}
@@ -54,6 +68,27 @@
           </tbody>
         </table>
       </div>
+      {% if page_obj %}
+        <nav class="pagination justify-between flex-wrap" aria-label="Paginación">
+          <span class="text-xs text-mm-muted">
+            Mostrando <strong class="text-mm-ink">{{ page_obj.start_index }}–{{ page_obj.end_index }}</strong>
+            de <strong class="text-mm-ink">{{ page_obj.paginator.count }}</strong> registro{{ page_obj.paginator.count|pluralize:"s" }} (25 por página)
+          </span>
+          <div class="flex items-center gap-2">
+            {% if page_obj.has_previous %}
+              <a class="button secondary small" href="?{% if query_base %}{{ query_base }}&{% endif %}page={{ page_obj.previous_page_number }}">← Anterior</a>
+            {% else %}
+              <span class="button secondary small opacity-45 pointer-events-none" aria-disabled="true">← Anterior</span>
+            {% endif %}
+            <span class="px-2 text-xs font-semibold text-mm-ink">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+            {% if page_obj.has_next %}
+              <a class="button secondary small" href="?{% if query_base %}{{ query_base }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente →</a>
+            {% else %}
+              <span class="button secondary small opacity-45 pointer-events-none" aria-disabled="true">Siguiente →</span>
+            {% endif %}
+          </div>
+        </nav>
+      {% endif %}
     {% else %}
       <p class="empty">No hay registros para mostrar.</p>
     {% endif %}

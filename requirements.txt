@@ -1,12 +1,12 @@
-﻿# ─── Django core ─────────────────────────────────────────────────────────────
+#  Django core 
 Django>=6.0
-djangorestframework>=3.15
 
-# ─── Base de datos (PostgreSQL) ───────────────────────────────────────────────
+#  Base de datos (PostgreSQL) 
 psycopg2-binary>=2.9
 
-# ─── Variables de entorno ─────────────────────────────────────────────────────
+#  Variables de entorno 
 django-environ>=0.11
 
-# ─── Utilidades ──────────────────────────────────────────────────────────────
-Pillow>=10.0       # Para campos ImageField si se necesitan
+#  Producción en VPS (WSGI + Archivos estáticos) 
+gunicorn>=22.0
+whitenoise>=6.7

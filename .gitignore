@@ -25,5 +25,6 @@ env/
 .idea/
 *.swp
 
-# Repositorios auxiliares
+# Repositorios y paquetes de despliegue
 minimarket-api/
+minimarket-web-vps.zip

@@ -1,9 +1,9 @@
-﻿"""
-Django settings for Minimarket Django Admin.
-Comparte la misma BD PostgreSQL que la API FastAPI (minimarket-api).
-Los modelos usan managed = False para no tocar el esquema de FastAPI.
+"""
+Django settings — Minimarket Admin Portal.
+Comparte BD PostgreSQL con FastAPI; los modelos usan managed=False.
 """
 
+from importlib.util import find_spec
 from pathlib import Path
 import environ
 
@@ -13,7 +13,26 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ── Entorno ──────────────────────────────────────────────────────────────────
 env = environ.Env(
     DEBUG=(bool, True),
-    ALLOWED_HOSTS=(list, ["localhost", "127.0.0.1"]),
+    ALLOWED_HOSTS=(list, [
+        "localhost",
+        "127.0.0.1",
+        "64.236.138.169",
+        "minimarket-api.duckdns.org",
+        "*",
+    ]),
+    CSRF_TRUSTED_ORIGINS=(list, [
+        "https://minimarket-api.duckdns.org",
+        "http://minimarket-api.duckdns.org",
+        "http://minimarket-api.duckdns.org:8001",
+        "http://minimarket-api.duckdns.org:8080",
+        "http://64.236.138.169",
+        "http://64.236.138.169:8001",
+        "http://64.236.138.169:8080",
+        "http://127.0.0.1:8080",
+        "http://localhost:8080",
+        "http://127.0.0.1:8001",
+        "http://localhost:8001",
+    ]),
 )
 environ.Env.read_env(BASE_DIR / ".env")
 
@@ -21,6 +40,10 @@ environ.Env.read_env(BASE_DIR / ".env")
 SECRET_KEY = env("SECRET_KEY", default="django-insecure-cambia-esto-en-produccion")
 DEBUG       = env("DEBUG")
 ALLOWED_HOSTS = env("ALLOWED_HOSTS")
+CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS")
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
+
 
 # ── Aplicaciones ──────────────────────────────────────────────────────────────
 INSTALLED_APPS = [
@@ -33,13 +56,16 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    # Terceros
-    "rest_framework",
 ]
 
 # ── Middleware ────────────────────────────────────────────────────────────────
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    *(
+        ["whitenoise.middleware.WhiteNoiseMiddleware"]
+        if find_spec("whitenoise") is not None
+        else []
+    ),
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -70,19 +96,31 @@ TEMPLATES = [
 WSGI_APPLICATION = "core.wsgi.application"
 ASGI_APPLICATION = "core.asgi.application"
 
-# ── Base de datos ─────────────────────────────────────────────────────────────
-# Misma BD que FastAPI. Django NO migra ni crea tablas (managed=False en modelos).
-# Solo la tabla django_migrations y las de auth/admin son gestionadas por Django.
-DATABASES = {
-    "default": env.db(
-        "DATABASE_URL",
-        default="postgresql://postgres:postgres@localhost:5432/minimarket_db",
-    )
-}
+# BD compartida con FastAPI — Django no migra ni crea tablas (managed=False).
+# Acepta DATABASE_URL completa o variables individuales.
+if env("DATABASE_URL", default=None):
+    DATABASES = {"default": env.db("DATABASE_URL")}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": env("DB_NAME", default="minimarket_db"),
+            "USER": env("DB_USER", default="postgres"),
+            "PASSWORD": env("DB_PASSWORD", default="postgres"),
+            "HOST": env("DB_HOST", default="localhost"),
+            "PORT": env("DB_PORT", default="5432"),
+        }
+    }
 
-# ── Modelo de usuario personalizado ───────────────────────────────────────────
-# Usamos el modelo Usuario de la tienda que mapea la tabla "usuario" de FastAPI.
+# Reutilizar conexiones TCP hacia PostgreSQL (especialmente útil contra VPS remota)
+DATABASES["default"]["CONN_MAX_AGE"] = env.int("CONN_MAX_AGE", default=60)
+DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
+
+
+# ── Modelo de usuario y backend optimizado ───────────────────────────────────
+# Usa el modelo Usuario de tienda que mapea la tabla "usuario" de FastAPI.
 AUTH_USER_MODEL = "tienda.Usuario"
+AUTHENTICATION_BACKENDS = ["tienda.services.MinimarketAuthBackend"]
 
 # ── Autenticacion de contrasenas ──────────────────────────────────────────────
 AUTH_PASSWORD_VALIDATORS = [
@@ -99,25 +137,16 @@ USE_I18N      = True
 USE_TZ        = True
 
 # ── Archivos estaticos ────────────────────────────────────────────────────────
-STATIC_URL  = "static/"
+STATIC_URL  = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-MEDIA_URL   = "media/"
+WHITENOISE_USE_FINDERS = True
+MEDIA_URL   = "/media/"
 MEDIA_ROOT  = BASE_DIR / "media"
 
-# ── DRF (Django REST Framework) ───────────────────────────────────────────────
-REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.SessionAuthentication",
-    ],
-    "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.IsAuthenticated",
-    ],
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
-    "PAGE_SIZE": 20,
-}
-
 # ── FastAPI integration ───────────────────────────────────────────────────────
-FASTAPI_BASE_URL = env("FASTAPI_BASE_URL", default="http://localhost:8000")
+FASTAPI_BASE_URL = env("FASTAPI_BASE_URL", default="https://minimarket-api.duckdns.org")
+FASTAPI_WS_URL   = env("FASTAPI_WS_URL", default="wss://minimarket-api.duckdns.org")
+
 
 # ── Miscelaneos ───────────────────────────────────────────────────────────────
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

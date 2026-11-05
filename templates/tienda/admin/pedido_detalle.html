@@ -1,77 +1,120 @@
 {% extends "tienda/admin/base.html" %}
-{% block title %}Pedido #{{ pedido.id_pedido }}{% endblock %}
+{% block title %}{% if pedido.codigo_pedido %}{{ pedido.codigo_pedido }}{% else %}Pedido #{{ pedido.id_pedido }}{% endif %}{% endblock %}
 {% block content %}
-  <div class="breadcrumbs"><a href="{% url 'tienda:admin-pedidos' %}">Pedidos</a><span>/</span><span>#{{ pedido.id_pedido }}</span></div>
+  <div class="breadcrumbs">
+    <a href="{% url 'tienda:admin-pedidos' %}">Pedidos</a>
+    <span>/</span>
+    <span class="font-medium text-mm-ink">{% if pedido.codigo_pedido %}{{ pedido.codigo_pedido }}{% else %}#{{ pedido.id_pedido }}{% endif %}</span>
+  </div>
+
   <section class="page-heading">
     <div>
       <p class="eyebrow">HISTORIAL DE PEDIDOS</p>
-      <h1>Pedido #{{ pedido.id_pedido }}</h1>
-      <p class="muted">Creado el {{ pedido.fecha_creacion|date:"d/m/Y H:i" }}</p>
+      <h1>{% if pedido.codigo_pedido %}{{ pedido.codigo_pedido }}{% else %}Pedido #{{ pedido.id_pedido }}{% endif %}</h1>
+      <p class="muted text-sm">Creado el {{ pedido.fecha_creacion|date:"d/m/Y H:i" }}</p>
     </div>
-    <span class="badge {{ pedido.estado|lower }}">{{ pedido.get_estado_display }}</span>
+    <span class="badge {{ pedido.estado|lower }} text-sm px-3.5 py-1.5">{{ pedido.get_estado_display }}</span>
   </section>
 
   <div class="detail-grid">
     <section class="panel">
-      <div class="section-heading"><h2>Productos</h2><span>{{ detalles|length }} artículos</span></div>
+      <div class="section-heading">
+        <h2>Productos</h2>
+        <span class="badge">{{ detalles|length }} artículo{{ detalles|length|pluralize:"s" }}</span>
+      </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Producto</th><th>Cantidad</th><th>Precio</th><th>Subtotal</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Cantidad</th>
+              <th>Precio</th>
+              <th>Subtotal</th>
+            </tr>
+          </thead>
           <tbody>
             {% for detalle in detalles %}
               <tr>
-                <td>{{ detalle.id_producto.nombre }}</td>
+                <td class="font-medium text-mm-ink">{{ detalle.id_producto.nombre }}</td>
                 <td>{{ detalle.cantidad }}</td>
                 <td>$ {{ detalle.precio_unitario|floatformat:2 }}</td>
-                <td>$ {{ detalle.subtotal|floatformat:2 }}</td>
+                <td class="font-semibold">$ {{ detalle.subtotal|floatformat:2 }}</td>
               </tr>
             {% empty %}
-              <tr><td colspan="4">No hay productos asociados.</td></tr>
+              <tr><td colspan="4" class="muted py-6 text-center">No hay productos asociados.</td></tr>
             {% endfor %}
           </tbody>
-          <tfoot><tr><th colspan="3">Envío</th><td>$ {{ pedido.costo_envio|floatformat:2 }}</td></tr><tr><th colspan="3">Total</th><td><strong>$ {{ pedido.total|floatformat:2 }}</strong></td></tr></tfoot>
+          <tfoot>
+            <tr>
+              <th colspan="3">Envío</th>
+              <td>$ {{ pedido.costo_envio|floatformat:2 }}</td>
+            </tr>
+            <tr>
+              <th colspan="3">Total</th>
+              <td><strong class="text-base text-mm-ink">$ {{ pedido.total|floatformat:2 }}</strong></td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </section>
-    <aside class="panel">
+
+    <aside class="panel space-y-1 text-sm">
       <p class="eyebrow">CLIENTE</p>
-      <h2>{{ pedido.id_cliente.nombre_completo }}</h2>
-      <p>{{ pedido.id_cliente.email }}</p>
-      <p>{{ pedido.id_cliente.telefono|default:"Sin teléfono registrado" }}</p>
+      <h2 class="text-lg">{{ pedido.id_cliente.nombre_completo }}</h2>
+      <p class="text-mm-muted">{{ pedido.id_cliente.email }}</p>
+      <p class="text-mm-muted">{{ pedido.id_cliente.telefono|default:"Sin teléfono registrado" }}</p>
+
       <hr>
       <p class="eyebrow">SUCURSAL Y ENTREGA</p>
-      <p><strong>{{ pedido.id_sucursal.nombre }}</strong></p>
+      <p><strong class="text-mm-ink">{{ pedido.id_sucursal.nombre }}</strong></p>
       <p>{{ pedido.get_tipo_entrega_display }}</p>
       {% if direccion %}
-        <p>{{ direccion.detalle_direccion }}</p>
-        {% if direccion.punto_referencia %}<p class="muted">Referencia: {{ direccion.punto_referencia }}</p>{% endif %}
-        <p class="muted">{{ direccion.id_municipio.nombre }}</p>
+        <div class="mt-2 rounded-lg border border-mm-line bg-mm-canvas/70 p-3 text-xs space-y-1">
+          <p class="font-medium text-mm-ink">{{ direccion.detalle_direccion }}</p>
+          {% if direccion.punto_referencia %}<p class="muted">Referencia: {{ direccion.punto_referencia }}</p>{% endif %}
+          <p class="muted">{{ direccion.id_municipio.nombre }}</p>
+        </div>
       {% endif %}
+
       <hr>
       <p class="eyebrow">PAGO</p>
-      <p>{{ pedido.get_metodo_pago_display }} · {{ pedido.get_estado_pago_display }}</p>
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="font-medium">{{ pedido.get_metodo_pago_display }}</span>
+        <span class="badge {% if pedido.estado_pago == 'PAGADO' %}aprobado{% else %}pendiente{% endif %}">
+          {{ pedido.get_estado_pago_display }}
+        </span>
+      </div>
     </aside>
   </div>
 
   <section class="panel">
     <div class="section-heading">
-      <div><p class="eyebrow">ADMINISTRACIÓN</p><h2>Estado, pago y repartidor</h2></div>
+      <div>
+        <p class="eyebrow">ADMINISTRACIÓN</p>
+        <h2>Estado, pago y repartidor</h2>
+      </div>
     </div>
     {% if pedido.estado == "CANCELADO" %}
-      <p class="muted">Este pedido cancelado se conserva en el historial y no se puede reactivar.</p>
+      <p class="muted text-sm">Este pedido cancelado se conserva en el historial y no se puede reactivar.</p>
     {% endif %}
-    <form method="post" class="form-stack" novalidate>
+    <form method="post" class="form-stack mt-3" novalidate>
       {% csrf_token %}
-      {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
-      {% for field in form %}
-        <div class="field">
-          {{ field.label_tag }}
-          {{ field }}
-          {% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+      {% if form.non_field_errors %}
+        <div class="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm font-medium text-red-700">
+          {{ form.non_field_errors }}
         </div>
-      {% endfor %}
+      {% endif %}
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {% for field in form %}
+          <div class="field">
+            {{ field.label_tag }}
+            {{ field }}
+            {% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+          </div>
+        {% endfor %}
+      </div>
       {% if pedido.estado != "CANCELADO" %}
-        <div class="form-actions">
+        <div class="form-actions pt-2 border-t border-mm-line">
           <button class="button primary" type="submit">Guardar cambios</button>
           <a class="button secondary" href="{% url 'tienda:admin-pedidos' %}">Volver a pedidos</a>
         </div>

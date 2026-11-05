@@ -1,27 +1,47 @@
-{% extends base_template %}
+{% extends base_template|default:"tienda/admin/base.html" %}
 {% block title %}{{ title }}{% endblock %}
 {% block content %}
-  <div class="breadcrumbs"><a href="{{ cancel_url }}">Volver al listado</a><span>/</span><span>{{ title }}</span></div>
+  <div class="breadcrumbs">
+    <a href="{{ cancel_url }}">← Volver al listado</a>
+    <span>/</span>
+    <span class="font-medium text-mm-ink">{{ title }}</span>
+  </div>
+
   <section class="page-heading">
     <div>
       <p class="eyebrow">GESTIÓN DEL PORTAL</p>
       <h1>{{ title }}</h1>
-      {% if description %}<p class="muted">{{ description }}</p>{% endif %}
+      {% if description %}<p class="muted text-sm">{{ description }}</p>{% endif %}
     </div>
   </section>
+
   <section class="panel portal-form-panel">
-    <form method="post" class="form-stack" novalidate>
+    <form method="post" class="form-stack mt-0" novalidate>
       {% csrf_token %}
-      {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
-      {% for field in form %}
-        <div class="field">
-          {{ field.label_tag }}
-          {{ field }}
-          {% if field.help_text %}<span class="muted">{{ field.help_text }}</span>{% endif %}
-          {% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+      {% if form.non_field_errors %}
+        <div class="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm font-medium text-red-700">
+          {{ form.non_field_errors }}
         </div>
+      {% endif %}
+
+      {% for field in form %}
+        {% if field.field.widget.input_type == "checkbox" %}
+          <label class="field field-checkbox cursor-pointer">
+            {{ field }}
+            <span class="font-semibold text-mm-ink">{{ field.label }}</span>
+            {% for error in field.errors %}<span class="field-error ml-auto">{{ error }}</span>{% endfor %}
+          </label>
+        {% else %}
+          <div class="field">
+            {{ field.label_tag }}
+            {{ field }}
+            {% if field.help_text %}<span class="text-xs text-mm-muted">{{ field.help_text }}</span>{% endif %}
+            {% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+          </div>
+        {% endif %}
       {% endfor %}
-      <div class="form-actions">
+
+      <div class="form-actions pt-2 border-t border-mm-line">
         <button class="button primary" type="submit">{{ submit_label }}</button>
         <a class="button secondary" href="{{ cancel_url }}">Cancelar</a>
       </div>

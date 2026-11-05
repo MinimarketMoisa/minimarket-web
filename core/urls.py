@@ -1,11 +1,7 @@
-﻿"""URLs raiz de minimarket-django."""
+"""URLs raíz de minimarket-web."""
 
 from django.contrib import admin
-from django.urls import path, include
-
-admin.site.site_header = "Minimarket Admin"
-admin.site.site_title  = "Minimarket"
-admin.site.index_title = "Panel de administracion"
+from django.urls import include, path
 
 urlpatterns = [
     path("", include("tienda.urls")),

@@ -1,0 +1,283 @@
+{% extends "tienda/admin/base.html" %}
+{% block title %}Reporte #{{ denuncia.id_denuncia }}{% endblock %}
+
+{% block content %}
+<div class="breadcrumbs">
+  <a href="{% url 'tienda:admin-denuncias' %}">Reporte</a>
+  <span>/</span>
+  <span class="font-medium text-mm-ink">#{{ denuncia.id_denuncia }}</span>
+</div>
+
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">SOPORTE TÉCNICO</p>
+    <h1>Reporte #{{ denuncia.id_denuncia }}</h1>
+    <p class="muted text-sm">Registrado el {{ denuncia.fecha_creacion|date:"d/m/Y H:i"|default:"—" }}</p>
+  </div>
+  <span class="badge {{ denuncia.estado|lower }} text-sm px-3.5 py-1.5">
+    {{ denuncia.get_estado_display }}
+  </span>
+</section>
+
+<div class="detail-grid">
+  <div>
+    <section class="panel">
+      <p class="eyebrow">INCIDENCIA REPORTADA</p>
+      <h2>{{ denuncia.motivo }}</h2>
+      <p class="mt-2 text-sm text-mm-muted whitespace-pre-wrap leading-relaxed">{{ denuncia.descripcion|default:"El cliente no agregó comentarios adicionales." }}</p>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">PEDIDO VINCULADO</p>
+          <h2>{% if denuncia.id_pedido and denuncia.id_pedido.codigo_pedido %}{{ denuncia.id_pedido.codigo_pedido }}{% else %}Pedido #{{ denuncia.id_pedido_id }}{% endif %}</h2>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <a class="button secondary small" href="{% url 'tienda:admin-pedido-detalle' denuncia.id_pedido_id %}">Ver pedido</a>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-3 text-sm">
+        <div>
+          <span class="text-xs text-mm-muted block">Sucursal</span>
+          <strong class="text-mm-ink">{{ denuncia.id_pedido.id_sucursal.nombre }}</strong>
+        </div>
+        <div>
+          <span class="text-xs text-mm-muted block">Entrega y estado</span>
+          <strong class="text-mm-ink">
+            {{ denuncia.id_pedido.get_tipo_entrega_display|default:"Pedido" }} · {{ denuncia.id_pedido.get_estado_display }}
+          </strong>
+        </div>
+        <div>
+          <span class="text-xs text-mm-muted block">Total y pago</span>
+          <strong class="text-mm-ink">$ {{ denuncia.id_pedido.total|floatformat:2 }}</strong>
+          {% if denuncia.id_pedido.metodo_pago %}
+            <span class="text-mm-muted">· {{ denuncia.id_pedido.get_metodo_pago_display }}</span>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if direccion %}
+        <hr>
+        <p class="text-sm text-mm-muted">
+          <strong class="text-mm-ink">Dirección de entrega:</strong>
+          {{ direccion.detalle_direccion }}{% if direccion.punto_referencia %} ({{ direccion.punto_referencia }}){% endif %} · {{ direccion.id_municipio.nombre }}
+        </p>
+      {% endif %}
+    </section>
+
+    {% if soporte_previo %}
+      <section class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">ÚLTIMA ATENCIÓN REGISTRADA</p>
+            <h2>Bitácora de soporte</h2>
+          </div>
+          {% if soporte_previo.es_estructurado %}
+            <span class="badge aprobado">{{ soporte_previo.entrada }} – {{ soporte_previo.salida }} ({{ soporte_previo.duracion }})</span>
+          {% endif %}
+        </div>
+        {% if soporte_previo.es_estructurado %}
+          <p class="text-xs text-mm-muted mb-2">
+            Atendido por <strong class="text-mm-ink">{{ soporte_previo.admin }}</strong> el {{ soporte_previo.fecha }}
+            · Prioridad <strong class="text-mm-ink">{{ soporte_previo.prioridad }}</strong>
+            · {{ soporte_previo.accion }}
+          </p>
+        {% endif %}
+        <p class="text-sm text-mm-ink whitespace-pre-wrap">{{ soporte_previo.detalle }}</p>
+      </section>
+    {% endif %}
+  </div>
+
+  <aside class="panel space-y-1 text-sm h-fit">
+    <p class="eyebrow">CLIENTE</p>
+    {% if denuncia.id_cliente %}
+      <h2 class="text-lg">{{ denuncia.id_cliente.nombre_completo }}</h2>
+      <p class="text-mm-muted">{{ denuncia.id_cliente.email }}</p>
+      <p class="text-mm-muted">{{ denuncia.id_cliente.telefono|default:"Sin teléfono registrado" }}</p>
+    {% else %}
+      <p class="muted">Cliente no identificado.</p>
+    {% endif %}
+
+    <hr>
+    <div class="flex items-center justify-between gap-2">
+      <p class="eyebrow mb-0">REPARTIDOR</p>
+      {% if stats_repartidor.total > 1 %}
+        <span class="badge cancelado">{{ stats_repartidor.total }} reportes</span>
+      {% endif %}
+    </div>
+    {% if denuncia.id_repartidor %}
+      <p class="pt-1"><strong class="text-mm-ink text-base">{{ denuncia.id_repartidor.nombre_completo }}</strong></p>
+      <p class="text-mm-muted">{{ denuncia.id_repartidor.email }}</p>
+      <p class="text-mm-muted">{{ denuncia.id_repartidor.telefono|default:"Sin teléfono registrado" }}</p>
+      {% if perfil_repartidor and perfil_repartidor.placa_vehiculo %}
+        <p class="text-mm-muted pt-1">Placa: <strong class="text-mm-ink">{{ perfil_repartidor.placa_vehiculo }}</strong></p>
+      {% endif %}
+    {% else %}
+      <p class="muted pt-1">No asignado.</p>
+    {% endif %}
+  </aside>
+</div>
+
+{% if form %}
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm font-medium text-red-700">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    <div class="detail-grid">
+      <section class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">SOPORTE TÉCNICO</p>
+            <h2>Resolución del caso</h2>
+          </div>
+        </div>
+
+        <div class="form-stack mt-3">
+          <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div class="field">
+              {{ form.estado.label_tag }}
+              {{ form.estado }}
+              {% for error in form.estado.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+            </div>
+            <div class="field">
+              {{ form.prioridad.label_tag }}
+              {{ form.prioridad }}
+              {% for error in form.prioridad.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+            </div>
+            <div class="field">
+              {{ form.accion_tomada.label_tag }}
+              {{ form.accion_tomada }}
+              {% for error in form.accion_tomada.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="flex items-center justify-between gap-2">
+              {{ form.detalle_solucion.label_tag }}
+              <span id="contadorSolucion" class="text-xs font-normal text-mm-muted">0 / 280</span>
+            </div>
+            {{ form.detalle_solucion }}
+            {% for error in form.detalle_solucion.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+          </div>
+
+          <div class="form-actions pt-2 border-t border-mm-line">
+            <button class="button primary" type="submit">Guardar solución</button>
+            <a class="button secondary" href="{% url 'tienda:admin-denuncias' %}">Volver</a>
+          </div>
+        </div>
+      </section>
+
+      <aside class="panel text-sm h-fit">
+        <p class="eyebrow">HORARIO DE ATENCIÓN</p>
+        <h2 class="text-lg">Control del administrador</h2>
+        <p class="text-mm-muted mt-1">
+          {{ user.nombre_completo|default:"Administrador" }}{% if fecha_hoy %} · {{ fecha_hoy|date:"d/m/Y" }}{% endif %}
+        </p>
+
+        <hr>
+        <div class="space-y-3.5">
+          <div class="field">
+            {{ form.hora_entrada.label_tag }}
+            {{ form.hora_entrada }}
+            {% for error in form.hora_entrada.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+          </div>
+
+          <div class="field">
+            <div class="flex items-center justify-between gap-2">
+              {{ form.hora_salida.label_tag }}
+              <button type="button" id="btnHoraActual" class="text-xs font-semibold text-mm-green-dark hover:text-mm-orange-dark bg-transparent border-0 p-0 cursor-pointer">
+                Hora actual
+              </button>
+            </div>
+            {{ form.hora_salida }}
+            {% for error in form.hora_salida.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+          </div>
+        </div>
+
+        <hr>
+        <div class="flex items-center justify-between">
+          <span class="text-mm-muted">Tiempo empleado</span>
+          <span id="duracionSoporteTexto" class="badge aprobado">&lt; 1 min</span>
+        </div>
+      </aside>
+    </div>
+  </form>
+
+  <script>
+    (function () {
+      const inputEntrada = document.getElementById('id_hora_entrada');
+      const inputSalida = document.getElementById('id_hora_salida');
+      const btnHoraActual = document.getElementById('btnHoraActual');
+      const lblDuracion = document.getElementById('duracionSoporteTexto');
+      const txtDetalle = document.getElementById('id_detalle_solucion');
+      const lblContador = document.getElementById('contadorSolucion');
+      let salidaEditada = false;
+
+      function horaActualHHMM() {
+        const ahora = new Date();
+        return String(ahora.getHours()).padStart(2, '0') + ':' + String(ahora.getMinutes()).padStart(2, '0');
+      }
+
+      function aMinutos(valor) {
+        if (!valor || !valor.includes(':')) return null;
+        const p = valor.split(':').map(Number);
+        return p[0] * 60 + p[1];
+      }
+
+      function actualizarDuracion() {
+        if (!inputEntrada || !inputSalida || !lblDuracion) return;
+        const mIn = aMinutos(inputEntrada.value);
+        const mOut = aMinutos(inputSalida.value);
+        if (mIn === null || mOut === null) return;
+        if (mOut < mIn) {
+          lblDuracion.textContent = 'Horario inválido';
+          lblDuracion.className = 'badge cancelado';
+          return;
+        }
+        lblDuracion.className = 'badge aprobado';
+        const diff = mOut - mIn;
+        if (diff === 0) lblDuracion.textContent = '< 1 min';
+        else if (diff < 60) lblDuracion.textContent = diff + ' min';
+        else lblDuracion.textContent = Math.floor(diff / 60) + ' h ' + String(diff % 60).padStart(2, '0') + ' min';
+      }
+
+      function actualizarContador() {
+        if (txtDetalle && lblContador) lblContador.textContent = txtDetalle.value.length + ' / 280';
+      }
+
+      if (inputSalida) {
+        inputSalida.addEventListener('input', function () {
+          salidaEditada = true;
+          actualizarDuracion();
+        });
+      }
+      if (inputEntrada) inputEntrada.addEventListener('input', actualizarDuracion);
+      if (btnHoraActual && inputSalida) {
+        btnHoraActual.addEventListener('click', function () {
+          inputSalida.value = horaActualHHMM();
+          salidaEditada = false;
+          actualizarDuracion();
+        });
+      }
+      setInterval(function () {
+        if (inputSalida && !salidaEditada) {
+          inputSalida.value = horaActualHHMM();
+          actualizarDuracion();
+        }
+      }, 15000);
+
+      if (txtDetalle) {
+        txtDetalle.addEventListener('input', actualizarContador);
+        actualizarContador();
+      }
+      actualizarDuracion();
+    })();
+  </script>
+{% endif %}
+{% endblock %}

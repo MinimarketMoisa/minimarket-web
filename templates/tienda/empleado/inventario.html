@@ -5,43 +5,83 @@
     <div>
       <p class="eyebrow">OPERACIONES</p>
       <h1>Inventario</h1>
-      <p class="muted">Existencias y vencimientos de tu sucursal.</p>
+      <p class="muted text-sm">Existencias y fechas de vencimiento de tu sucursal.</p>
     </div>
   </section>
+
   <form method="get" class="filter-bar">
     <label class="field compact">
       <span>Buscar producto</span>
       <input type="search" name="q" value="{{ busqueda }}" placeholder="Nombre o código de barras">
     </label>
     {% if solo_bajo %}<input type="hidden" name="bajo" value="1">{% endif %}
-    <button class="button primary" type="submit">Buscar</button>
-    {% if solo_bajo %}<a class="button secondary" href="{% url 'tienda:inventario' %}?q={{ busqueda|urlencode }}">Mostrar todos</a>{% else %}<a class="button secondary" href="?q={{ busqueda|urlencode }}&bajo=1">Existencias bajas</a>{% endif %}
+    <div class="flex flex-wrap gap-2">
+      <button class="button primary" type="submit">Buscar</button>
+      {% if solo_bajo %}
+        <a class="button secondary" href="{% url 'tienda:inventario' %}?q={{ busqueda|urlencode }}">Mostrar todos</a>
+      {% else %}
+        <a class="button secondary" href="?q={{ busqueda|urlencode }}&bajo=1">Solo existencias bajas</a>
+      {% endif %}
+      {% if busqueda %}
+        <a class="button secondary" href="{% url 'tienda:inventario' %}">Limpiar</a>
+      {% endif %}
+    </div>
   </form>
+
   <section class="panel">
     {% if inventario %}
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Producto</th><th>Categoría</th><th>Existencias</th><th>Vencimiento</th><th></th></tr></thead>
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Categoría</th>
+              <th>Existencias</th>
+              <th>Vencimiento</th>
+              <th></th>
+            </tr>
+          </thead>
           <tbody>
             {% for existencia in inventario %}
               <tr>
-                <td><strong>{{ existencia.nombre }}</strong><br><small class="muted">{{ existencia.codigo_barras|default:"Sin código" }}</small></td>
+                <td>
+                  <strong class="text-mm-ink">{{ existencia.nombre }}</strong>
+                  <div class="text-xs text-mm-muted">{{ existencia.codigo_barras|default:"Sin código" }}</div>
+                </td>
                 <td>{{ existencia.id_categoria.nombre }}</td>
-                <td><span class="stock {% if existencia.stock_disponible <= 5 %}low{% endif %}">{{ existencia.stock_disponible }}</span></td>
-                <td>{{ existencia.fecha_vencimiento|default:"—" }}</td>
-                <td><a class="button small secondary" href="{% url 'tienda:inventario-editar' existencia.pk %}">Actualizar</a></td>
+                <td>
+                  <span class="stock {% if existencia.stock_disponible <= 5 %}low{% endif %}">
+                    {{ existencia.stock_disponible }}
+                  </span>
+                </td>
+                <td class="text-mm-muted">{{ existencia.fecha_vencimiento|default:"—" }}</td>
+                <td class="text-right">
+                  <a class="button small secondary" href="{% url 'tienda:inventario-editar' existencia.pk %}">Actualizar</a>
+                </td>
               </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
-      {% if inventario.has_other_pages %}
-        <nav class="pagination" aria-label="Paginación">
-          {% if inventario.has_previous %}<a href="?q={{ busqueda|urlencode }}&bajo={% if solo_bajo %}1{% endif %}&page={{ inventario.previous_page_number }}">Anterior</a>{% endif %}
-          <span>Página {{ inventario.number }} de {{ inventario.paginator.num_pages }}</span>
-          {% if inventario.has_next %}<a href="?q={{ busqueda|urlencode }}&bajo={% if solo_bajo %}1{% endif %}&page={{ inventario.next_page_number }}">Siguiente</a>{% endif %}
-        </nav>
-      {% endif %}
+      <nav class="pagination justify-between flex-wrap" aria-label="Paginación">
+        <span class="text-xs text-mm-muted">
+          Mostrando <strong class="text-mm-ink">{{ inventario.start_index }}–{{ inventario.end_index }}</strong>
+          de <strong class="text-mm-ink">{{ inventario.paginator.count }}</strong> productos (25 por página)
+        </span>
+        <div class="flex items-center gap-2">
+          {% if inventario.has_previous %}
+            <a class="button secondary small" href="?q={{ busqueda|urlencode }}&bajo={% if solo_bajo %}1{% endif %}&page={{ inventario.previous_page_number }}">← Anterior</a>
+          {% else %}
+            <span class="button secondary small opacity-45 pointer-events-none" aria-disabled="true">← Anterior</span>
+          {% endif %}
+          <span class="px-2 text-xs font-semibold text-mm-ink">Página {{ inventario.number }} de {{ inventario.paginator.num_pages }}</span>
+          {% if inventario.has_next %}
+            <a class="button secondary small" href="?q={{ busqueda|urlencode }}&bajo={% if solo_bajo %}1{% endif %}&page={{ inventario.next_page_number }}">Siguiente →</a>
+          {% else %}
+            <span class="button secondary small opacity-45 pointer-events-none" aria-disabled="true">Siguiente →</span>
+          {% endif %}
+        </div>
+      </nav>
     {% else %}
       <p class="empty">No hay productos de inventario con estos filtros.</p>
     {% endif %}

@@ -1,0 +1,11 @@
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.log
+.git/
+staticfiles/
+media/
+minimarket-web-vps.zip
+

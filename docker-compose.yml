@@ -1,0 +1,12 @@
+services:
+  minimarket-web:
+    build: .
+    container_name: minimarket-web
+    restart: unless-stopped
+    network_mode: "host"
+    env_file:
+      - .env
+    environment:
+      - DEBUG=False
+      - PORT=8080
+

@@ -1,15 +1,22 @@
 {% extends "tienda/empleado/base.html" %}
+{% load static %}
 {% block title %}Acceso al sistema{% endblock %}
 {% block content %}
   <section class="login-wrap">
-    <div class="login-card">
-      <p class="eyebrow">MINIMARKET · OPERACIONES</p>
-      <h1>Acceso al sistema</h1>
-      <p class="muted">Ingresa con tu cuenta de empleado o administrador.</p>
+    <div class="login-card border-t-4 border-t-mm-orange shadow-md">
+      <div class="mb-5 flex flex-col items-start gap-2">
+        <img src="{% static 'tienda/logo-minimarket.png' %}" alt="MiniMarket" class="h-auto w-44">
+        <p class="eyebrow mb-0">MINIMARKET · OPERACIONES</p>
+      </div>
+      <h1 class="text-2xl font-extrabold tracking-tight text-mm-ink">Acceso al sistema</h1>
+      <p class="muted text-sm">Ingresa con tu cuenta de empleado o administrador.</p>
+
       <form method="post" class="form-stack">
         {% csrf_token %}
         {% if form.non_field_errors %}
-          <div class="form-errors">{{ form.non_field_errors }}</div>
+          <div class="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm font-medium text-red-700">
+            {{ form.non_field_errors }}
+          </div>
         {% endif %}
         {% for field in form %}
           <label class="field">
@@ -18,7 +25,7 @@
             {% if field.errors %}<small class="field-error">{{ field.errors|striptags }}</small>{% endif %}
           </label>
         {% endfor %}
-        <button class="button primary full" type="submit">Iniciar sesión</button>
+        <button class="button primary full mt-1" type="submit">Iniciar sesión</button>
       </form>
     </div>
   </section>

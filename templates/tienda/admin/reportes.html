@@ -1,0 +1,219 @@
+{% extends base_template|default:"tienda/admin/base.html" %}
+{% load static %}
+{% block title %}Métricas{% endblock %}
+
+{% block content %}
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">INTELIGENCIA DE NEGOCIO</p>
+    <h1>Métricas y Rendimiento</h1>
+    <p class="muted text-sm">
+      {% if portal == "empleado" %}
+        Métricas consolidadas de tu sucursal: <strong class="text-mm-ink">{{ sucursal_actual.nombre }}</strong>
+      {% else %}
+        Consolidado global de todas las sucursales y canales de venta
+      {% endif %}
+    </p>
+  </div>
+  <form method="get" class="filter-bar mb-0 py-3 px-4">
+    <label class="field compact">
+      <span class="text-xs">Mes / Año</span>
+      <input type="month" name="mes_anio" value="{{ mes_seleccionado }}" onchange="this.form.submit()">
+    </label>
+    {% if portal == "admin" and sucursales %}
+      <label class="field compact">
+        <span class="text-xs">Sucursal</span>
+        <select name="id_sucursal" onchange="this.form.submit()">
+          <option value="">Todas las sucursales</option>
+          {% for suc in sucursales %}
+            <option value="{{ suc.pk }}" {% if suc.pk|stringformat:"s" == sucursal_filtro %}selected{% endif %}>{{ suc.nombre }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    {% endif %}
+  </form>
+</section>
+
+<!-- Tarjetas de Resumen KPI -->
+<section class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 mb-6">
+  <div class="panel mb-0 p-5 border-t-4 border-t-mm-green">
+    <p class="eyebrow text-emerald-700">VENTAS TOTALES (MES)</p>
+    <h2 class="mt-2 text-3xl font-extrabold text-mm-ink">$ {{ total_ventas|floatformat:2 }}</h2>
+    <p class="mt-1 text-xs text-mm-muted">{{ pedidos_entregados_count }} pedidos entregados</p>
+  </div>
+
+  <div class="panel mb-0 p-5 border-t-4 border-t-sky-500">
+    <p class="eyebrow text-sky-600">EFECTIVIDAD DE ENTREGA</p>
+    <h2 class="mt-2 text-3xl font-extrabold text-mm-ink">{{ tasa_efectividad }}%</h2>
+    <p class="mt-1 text-xs text-mm-muted">{{ pedidos_cancelados_count }} cancelados de {{ total_pedidos_periodo }} totales</p>
+  </div>
+
+  <div class="panel mb-0 p-5 border-t-4 border-t-mm-orange">
+    <p class="eyebrow text-mm-orange-dark">TICKET PROMEDIO</p>
+    <h2 class="mt-2 text-3xl font-extrabold text-mm-ink">$ {{ ticket_promedio|floatformat:2 }}</h2>
+    <p class="mt-1 text-xs text-mm-muted">Por orden completada</p>
+  </div>
+
+  <div class="panel mb-0 p-5 border-t-4 border-t-violet-500">
+    <p class="eyebrow text-violet-600">MÉTODOS DE PAGO</p>
+    <div class="mt-2 flex flex-col gap-1 text-sm text-mm-ink">
+      <div class="flex justify-between"><span>Wompi / Tarjeta:</span><strong>$ {{ ventas_wompi|floatformat:2 }}</strong></div>
+      <div class="flex justify-between"><span>Transferencia:</span><strong>$ {{ ventas_transferencia|floatformat:2 }}</strong></div>
+      <div class="flex justify-between"><span>Contra entrega:</span><strong>$ {{ ventas_efectivo|floatformat:2 }}</strong></div>
+    </div>
+  </div>
+</section>
+
+<!-- Gráficas con Chart.js -->
+<div class="grid grid-cols-1 gap-6 lg:grid-cols-3 mb-6">
+  <section class="panel mb-0 lg:col-span-2">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">EVOLUCIÓN TEMPORAL</p>
+        <h2>Ventas Diarias del Mes ({{ mes_nombre }})</h2>
+      </div>
+    </div>
+    <div class="relative h-[300px]">
+      <canvas id="chartVentasDiarias"></canvas>
+    </div>
+  </section>
+
+  <section class="panel mb-0">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">DISTRIBUCIÓN</p>
+        <h2>Pagos Confirmados</h2>
+      </div>
+    </div>
+    <div class="relative h-[300px]">
+      <canvas id="chartMetodosPago"></canvas>
+    </div>
+  </section>
+</div>
+
+<!-- Ranking de Productos Más Vendidos y Desglose -->
+<div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+  <section class="panel mb-0">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">TOP ARTÍCULOS</p>
+        <h2>Productos Más Vendidos</h2>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th>Unidades</th>
+            <th>Venta Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for prod in top_productos %}
+            <tr>
+              <td><strong class="text-mm-ink">{{ prod.nombre }}</strong></td>
+              <td>{{ prod.unidades }}</td>
+              <td class="font-semibold">$ {{ prod.total_recaudado|floatformat:2 }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="3" class="muted py-6 text-center">No hay registros de ventas en este período.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel mb-0">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">DESPACHO Y REPARTO</p>
+        <h2>Rendimiento de Entrega</h2>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Repartidor</th>
+            <th>Entregas</th>
+            <th>Estado Actual</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for rep in rendimiento_repartidores %}
+            <tr>
+              <td class="font-medium text-mm-ink">{{ rep.nombre }}</td>
+              <td class="font-semibold">{{ rep.entregas }}</td>
+              <td>
+                <span class="badge {% if rep.estado == 'LIBRE' %}aprobado{% else %}pendiente{% endif %}">
+                  {{ rep.estado }}
+                </span>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="3" class="muted py-6 text-center">No se registran repartidores activos en el período.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  const diasLabels = {{ chart_dias_labels|safe }};
+  const diasValores = {{ chart_dias_valores|safe }};
+
+  new Chart(document.getElementById('chartVentasDiarias').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: diasLabels,
+      datasets: [{
+        label: 'Ventas ($)',
+        data: diasValores,
+        borderColor: '#707d0c',
+        backgroundColor: 'rgba(156, 170, 23, 0.14)',
+        borderWidth: 2.5,
+        tension: 0.3,
+        fill: true,
+        pointBackgroundColor: '#f67300',
+        pointRadius: 3.5,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { callback: function(value) { return '$ ' + value; } }
+        }
+      }
+    }
+  });
+
+  new Chart(document.getElementById('chartMetodosPago').getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Wompi / Tarjeta', 'Transferencia', 'Contra Entrega'],
+      datasets: [{
+        data: [{{ ventas_wompi|default:0 }}, {{ ventas_transferencia|default:0 }}, {{ ventas_efectivo|default:0 }}],
+        backgroundColor: ['#0ea5e9', '#9caa17', '#f67300'],
+        borderWidth: 2,
+        borderColor: '#ffffff'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom' } }
+    }
+  });
+</script>
+{% endblock %}

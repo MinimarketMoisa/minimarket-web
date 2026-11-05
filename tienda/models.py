@@ -1,6 +1,6 @@
 """
-Definicion de modelos de datos para la aplicacion tienda.
-Mapea las tablas de PostgreSQL administradas por FastAPI (managed=False).
+Modelos de la app tienda.
+Mapea las tablas de PostgreSQL gestionadas por FastAPI (managed=False).
 """
 
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
@@ -80,10 +80,21 @@ class Usuario(AbstractBaseUser):
     is_superuser = models.BooleanField(default=False)
     last_login = models.DateTimeField(null=True, blank=True)
 
+    # Columnas de seguridad y control de sesiones (Reporte Integral 2.4.0)
+    token_version = models.IntegerField(default=0)
+    intentos_fallidos = models.IntegerField(default=0)
+    bloqueado_hasta = models.DateTimeField(null=True, blank=True)
+    ultimo_correo_en = models.DateTimeField(null=True, blank=True)
+
     objects = UsuarioManager()
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["nombre_completo"]
+
+    def set_password(self, raw_password):
+        super().set_password(raw_password)
+        # Cambio de clave invalida todos los JWT activos del usuario
+        self.token_version = (self.token_version or 0) + 1
 
     @property
     def is_active(self):
@@ -93,11 +104,17 @@ class Usuario(AbstractBaseUser):
     def is_active(self, value):
         self.activo = value
 
+    def _tiene_permiso_admin(self) -> bool:
+        if self.is_superuser or self.is_staff:
+            return True
+        rol = getattr(self, "id_rol", None)
+        return bool(rol is not None and rol.nombre == "ADMIN")
+
     def has_perm(self, perm, obj=None):
-        return self.is_superuser or self.is_staff
+        return self._tiene_permiso_admin()
 
     def has_module_perms(self, app_label):
-        return self.is_superuser or self.is_staff
+        return self._tiene_permiso_admin()
 
     class Meta:
         managed = False
@@ -146,6 +163,9 @@ class Direccion(models.Model):
     )
     detalle_direccion = models.CharField(max_length=300)
     punto_referencia = models.CharField(max_length=300, blank=True, null=True)
+    latitud = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitud = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+
 
     class Meta:
         managed = False
@@ -200,7 +220,8 @@ class PerfilRepartidor(models.Model):
         verbose_name_plural = "Perfiles Repartidor"
 
     def __str__(self):
-        return f"Repartidor {self.id_repartidor} [{self.estado_operativo}]"
+        placa = f" ({self.placa_vehiculo})" if self.placa_vehiculo else ""
+        return f"{self.id_repartidor.nombre_completo}{placa} — {self.get_estado_operativo_display()}"
 
 
 # Catalogo
@@ -275,10 +296,17 @@ class Pedido(models.Model):
         ("EN_RUTA", "En ruta"), ("ENTREGADO", "Entregado"), ("CANCELADO", "Cancelado"),
     ]
     TIPO_ENTREGA_CHOICES = [("DOMICILIO", "Domicilio"), ("RETIRO", "Retiro en sucursal")]
-    METODO_PAGO_CHOICES = [("CONTRA_ENTREGA", "Contra entrega"), ("TRANSFERENCIA", "Transferencia")]
+    METODO_PAGO_CHOICES = [
+        ("CONTRA_ENTREGA", "Contra entrega"),
+        ("TRANSFERENCIA", "Transferencia"),
+        ("WOMPI", "Wompi (Tarjeta Crédito/Débito)"),
+        ("TARJETA", "Tarjeta / Wompi"),
+    ]
+
     ESTADO_PAGO_CHOICES = [("PENDIENTE", "Pendiente"), ("PAGADO", "Pagado")]
 
     id_pedido = models.BigAutoField(primary_key=True)
+    codigo_pedido = models.CharField(max_length=30, unique=True, null=True, blank=True)
     id_cliente = models.ForeignKey(
         Usuario, on_delete=models.RESTRICT,
         db_column="id_cliente", related_name="pedidos",
@@ -294,7 +322,7 @@ class Pedido(models.Model):
     )
     id_direccion = models.BigIntegerField(null=True, blank=True)
     canal = models.CharField(max_length=10, choices=CANAL_CHOICES)
-    fecha_creacion = models.DateTimeField(auto_now_add=False)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default="PENDIENTE")
     tipo_entrega = models.CharField(max_length=20, choices=TIPO_ENTREGA_CHOICES)
     metodo_pago = models.CharField(max_length=20, choices=METODO_PAGO_CHOICES)
@@ -310,7 +338,7 @@ class Pedido(models.Model):
         ordering = ["-fecha_creacion"]
 
     def __str__(self):
-        return f"Pedido #{self.id_pedido} - {self.estado}"
+        return f"{self.codigo_pedido or f'Pedido #{self.id_pedido}'} ({self.estado})"
 
 
 class DetallePedido(models.Model):
@@ -336,3 +364,56 @@ class DetallePedido(models.Model):
 
     def __str__(self):
         return f"{self.id_producto} x{self.cantidad}"
+
+
+# Denuncias sobre pedidos / repartidores (coincide con tabla denuncia_repartidor de FastAPI)
+class Denuncia(models.Model):
+    ESTADO_CHOICES = [
+        ("PENDIENTE", "Pendiente"),
+        ("INVESTIGANDO", "Investigando"),
+        ("RESUELTO", "Resuelto"),
+        ("DESESTIMADA", "Desestimada"),
+    ]
+
+    id_denuncia = models.BigAutoField(primary_key=True)
+    id_pedido = models.ForeignKey(
+        Pedido, on_delete=models.CASCADE,
+        db_column="id_pedido", related_name="denuncias",
+    )
+    id_cliente = models.ForeignKey(
+        Usuario, on_delete=models.CASCADE,
+        db_column="id_cliente", related_name="denuncias_cliente",
+    )
+    id_repartidor = models.ForeignKey(
+        Usuario, on_delete=models.CASCADE,
+        db_column="id_repartidor", related_name="denuncias_repartidor",
+    )
+    motivo = models.CharField(max_length=100)
+    descripcion = models.CharField(max_length=1000, blank=True, null=True)
+    estado = models.CharField(max_length=30, choices=ESTADO_CHOICES, default="PENDIENTE")
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    resolucion_admin = models.CharField(max_length=500, blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = "denuncia_repartidor"
+        verbose_name = "Reporte"
+        verbose_name_plural = "Reportes"
+        ordering = ["-fecha_creacion"]
+
+    @property
+    def pedido(self):
+        return self.id_pedido
+
+    def __str__(self):
+        codigo = (
+            self.id_pedido.codigo_pedido
+            if self.id_pedido_id and getattr(self, "id_pedido", None) and self.id_pedido.codigo_pedido
+            else f"#{self.id_pedido_id}"
+        )
+        return f"Reporte #{self.id_denuncia} - {codigo} [{self.estado}]"
+
+
+# Alias compatible con la nomenclatura SQLAlchemy/FastAPI
+DenunciaRepartidor = Denuncia
+

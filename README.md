@@ -1,102 +1,126 @@
-# Minimarket Web
+# MiniMarket Web — Portal de Operaciones y Administración
 
-Portal de operaciones para empleados y panel administrativo en Django, disenado para compartir la base de datos PostgreSQL con el backend FastAPI.
-
----
-
-## Requisitos Previos
-
-* Python 3.10 o superior (probado en Python 3.14)
-* PostgreSQL instalado y en ejecucion con la base de datos `minimarket_db`
+Portal web desarrollado en **Django** para la gestión operativa en sucursales (empleados) y administración global de **MiniMarket**. Diseñado para operar en tiempo real sobre la base de datos **PostgreSQL** compartida con el backend de **FastAPI** (`managed = False`).
 
 ---
 
-## Instalacion y Configuracion
+## Características Principales
 
-### 1. Clonar el repositorio y entrar al directorio
+* **Identificador de Negocio (`codigo_pedido`)**:
+  * Búsqueda y trazabilidad inmediata de pedidos mediante su código alfanumérico (ej. `PED-000002`, `PED-A7K92M`) y respaldo por ID numérico.
+  * Visualización prioritaria en listas, detalles y reportes de incidencias.
+* **Operaciones de Sucursal (Empleados)**:
+  * Gestión de flujo de pedidos: pendientes, preparados, pagos por transferencia y cancelación con devolución automática de inventario.
+  * Asignación y liberación transaccional de repartidores disponibles.
+  * Control de existencias por sucursal y fechas de vencimiento.
+* **Administración Global**:
+  * Métricas en tiempo real, histórico consolidado de ventas y balance por sucursales.
+  * Gráficas mensuales de ingresos, días con más ventas y productos más demandados.
+* **Módulo de Soporte Técnico (Reportes / Denuncias)**:
+  * Bandeja de incidencias reportadas por clientes sobre entregas y repartidores.
+  * Registro de atención con hora de entrada, hora de salida, cálculo de duración, prioridad y medida correctiva.
+* **Paginación Uniforme (25 registros)**:
+  * Paginación directa en SQL (`Paginator`) en pedidos, catálogo, inventario, usuarios, sucursales y reportes.
+* **Interfaz y Estilo**:
+  * Diseñado con **Tailwind CSS** y CSS personalizado respetando la paleta de MiniMarket (`#9caa17`, `#f67300`).
+  * Layout responsivo con espaciado constante y navegación lateral unificada.
+
+---
+
+## Requisitos
+
+* **Python 3.10+** (probado en Python 3.13 y 3.14).
+* **PostgreSQL** con la base de datos `minimarket_db` (local o en VPS remota).
+
+---
+
+## Instalación y Configuración Local
+
+### 1. Clonar el repositorio y acceder a la carpeta
 ```bash
 git clone <URL_DEL_REPOSITORIO>
 cd minimarket-web
 ```
 
-### 2. Crear y activar el entorno virtual
-* En Windows (PowerShell):
-  ```powershell
-  python -m venv .venv
-  .venv\Scripts\Activate.ps1
-  ```
-* En Linux / macOS:
-  ```bash
-  python3 -m venv .venv
-  source .venv/bin/activate
-  ```
+### 2. Entorno virtual
+```bash
+# Crear entorno virtual
+python3 -m venv .venv
+
+# Activar en Linux / macOS:
+source .venv/bin/activate
+
+# Activar en Windows (PowerShell):
+.venv\Scripts\Activate.ps1
+```
 
 ### 3. Instalar dependencias
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Configurar variables de entorno
-Copia el archivo de ejemplo `.env.example` como `.env`:
+### 4. Configurar variables de entorno (`.env`)
+Copia la plantilla `.env.example`:
 ```bash
 cp .env.example .env
 ```
-Edita `.env` e ingresa las credenciales de tu PostgreSQL local:
+Configura la conexión a tu base de datos PostgreSQL:
 ```ini
-DATABASE_URL=postgresql://postgres:TU_PASSWORD@localhost:5432/minimarket_db
+DEBUG=True
+SECRET_KEY=clave-secreta-de-desarrollo
+ALLOWED_HOSTS=localhost,127.0.0.1
+DATABASE_URL=postgresql://postgres:password@localhost:5432/minimarket_db
 ```
 
-### 5. Aplicar migraciones base de Django
+### 5. Iniciar el servidor local
 ```bash
-python manage.py migrate
+python manage.py runserver 8080
 ```
+Acceso al portal: [http://127.0.0.1:8080/empleados/login/](http://127.0.0.1:8080/empleados/login/)
 
 ---
 
-## Ejecutar el Proyecto
+## Usuarios de Prueba (Seed)
 
-Inicia el servidor de desarrollo en el puerto 8001:
+| Rol | Correo | Contraseña |
+| **Administrador** | `admin@minimarket.test` | `Prueba12345` |
+| **Empleado** | `empleado1@minimarket.test` | `Prueba12345` |
+
+---
+
+## Despliegue en VPS (Producción)
+El proyecto incluye soporte para **Gunicorn**, **WhiteNoise** y **Docker**:
+
+### Opción A — Con Docker (Recomendada para VPS)
 ```bash
-python manage.py runserver 8001
+docker compose up -d --build
 ```
 
-Empleados y administradores comparten el acceso:
-http://127.0.0.1:8001/empleados/login/
-
-El sistema redirige a cada usuario según su rol: el empleado entra a su sucursal y el administrador a un resumen global independiente de las sucursales.
-
-El portal del empleado permite:
-* Ver pedidos pendientes y preparados de la sucursal.
-* Consultar el detalle de entrega y los productos de cada pedido.
-* Marcar pedidos como preparados o cancelarlos; al cancelar se devuelve el stock.
-* Confirmar pagos pendientes por transferencia.
-* Asignar o cambiar el repartidor de un pedido a domicilio.
-* Consultar y actualizar existencias y fechas de vencimiento de la sucursal.
-
-Las plantillas HTML del portal están separadas en `templates/tienda/empleado/`; sus estilos están en `tienda/static/tienda/`.
-El logo oficial y la paleta verde/naranja de MiniMarket se aplican al portal de personal, al panel global y a la consola Django.
-
-El portal de administración global presenta pedidos, pagos, repartidores, existencias y rendimiento de todas las sucursales. El menú lateral abre los módulos de Django para gestionar pedidos, inventario, productos, categorías, cuentas, empleados y sucursales usando los mismos modelos y permisos.
-
-Las pantallas de Django Admin conservan sus operaciones de alta, consulta, edición y eliminación, integradas con la navegación y el diseño del portal. El empleado ve las operaciones de su sucursal y consulta el catálogo sin permisos de edición.
+### Opción B — Script automatizado
+```bash
+chmod +x deploy_vps.sh
+./deploy_vps.sh
+```
 
 ---
 
-## Acceso de Administrador
+## Estructura del Proyecto
 
-* Si la base de datos ya fue inicializada con los datos de prueba (seed de FastAPI):
-  * Email: `admin@minimarket.test`
-  * Contrasena: `Prueba12345`
-* O puedes crear un superusuario nuevo mediante:
-  ```bash
-  python manage.py createsuperuser
-  ```
-
----
-
-## Arquitectura y Roles
-
-* Modelos de negocio configurados con `managed = False`.
-* FastAPI administra el esquema de la base de datos (DDL).
-* Django lee y escribe directamente en la base de datos compartida en tiempo real.
-* El portal de empleados y el Admin Django aplican permisos por rol y restringen los datos de empleados a su sucursal.
+```text
+minimarket-web/
+├── core/                   # Configuración del proyecto Django (settings, urls, asgi, wsgi)
+├── tienda/                 # App principal (modelos managed=False, vistas, servicios, forms)
+│   ├── services.py         # Lógica de dominio, backend de auth y soporte técnico
+│   ├── models.py           # Mapeo SQLAlchemy/FastAPI a Django ORM
+│   ├── admin.py            # Personalización de Django Admin
+│   └── static/tienda/      # CSS, favicon y branding oficial
+├── templates/tienda/       # Plantillas HTML estructuradas
+│   ├── base_portal.html    # Plantilla base con Tailwind CSS
+│   ├── admin/              # Vistas administrativas y soporte
+│   ├── empleado/           # Vistas de operaciones de sucursal
+│   └── partials/           # Componentes reutilizables (sidebar, etc.)
+├── Dockerfile              # Empaquetado para despliegue en servidor
+├── docker-compose.yml      # Orquestación de producción
+├── requirements.txt        # Dependencias de Python
+└── cambios.md              # Registro detallado de optimizaciones y cambios
+```

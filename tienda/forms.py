@@ -1,11 +1,14 @@
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm
 from django.db.models import Q
+from django.utils import timezone
 
 from .models import (
     Categoria,
+    Denuncia,
     Empleado,
     Inventario,
+    Municipio,
     Pedido,
     PerfilRepartidor,
     Producto,
@@ -13,17 +16,27 @@ from .models import (
     Sucursal,
     Usuario,
 )
+from .services import (
+    SOPORTE_ACCION_CHOICES,
+    SOPORTE_PRIORIDAD_CHOICES,
+    formatear_resolucion_soporte,
+    parsear_resolucion_soporte,
+)
 
 
 class EmpleadoLoginForm(AuthenticationForm):
     username = forms.EmailField(
         label="Correo electrónico",
-        widget=forms.EmailInput(attrs={"autocomplete": "email", "autofocus": True}),
+        widget=forms.EmailInput(
+            attrs={"autocomplete": "email", "autofocus": True, "placeholder": "correo@minimarket.com"}
+        ),
     )
     password = forms.CharField(
         label="Contraseña",
         strip=False,
-        widget=forms.PasswordInput(attrs={"autocomplete": "current-password"}),
+        widget=forms.PasswordInput(
+            attrs={"autocomplete": "current-password", "placeholder": "••••••••"}
+        ),
     )
 
 
@@ -93,6 +106,10 @@ class SucursalPortalForm(forms.ModelForm):
             "longitud": forms.NumberInput(attrs={"step": "0.000001"}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["id_municipio"].queryset = Municipio.objects.order_by("nombre")
+
     def clean_latitud(self):
         latitud = self.cleaned_data["latitud"]
         if not -90 <= latitud <= 90:
@@ -120,6 +137,11 @@ class InventarioPortalForm(forms.ModelForm):
             "fecha_vencimiento": forms.DateInput(attrs={"type": "date"}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["id_sucursal"].queryset = Sucursal.objects.order_by("nombre")
+        self.fields["id_producto"].queryset = Producto.objects.order_by("nombre")
+
     def clean(self):
         cleaned_data = super().clean()
         sucursal = cleaned_data.get("id_sucursal")
@@ -146,10 +168,12 @@ class PedidoPortalForm(forms.Form):
     )
     id_repartidor = forms.ModelChoiceField(
         label="Repartidor asignado",
-        queryset=PerfilRepartidor.objects.filter(
+        queryset=PerfilRepartidor.objects.select_related("id_repartidor")
+        .filter(
             id_repartidor__activo=True,
             id_repartidor__id_rol__nombre="REPARTIDOR",
-        ).order_by("id_repartidor__nombre_completo"),
+        )
+        .order_by("id_repartidor__nombre_completo"),
         required=False,
         empty_label="Sin repartidor",
     )
@@ -200,7 +224,7 @@ class UsuarioPortalForm(forms.Form):
     )
     sucursal = forms.ModelChoiceField(
         label="Sucursal asignada",
-        queryset=Sucursal.objects.all().order_by("nombre"),
+        queryset=Sucursal.objects.order_by("nombre"),
         required=False,
     )
     cargo = forms.CharField(label="Cargo", max_length=50, required=False)
@@ -209,11 +233,7 @@ class UsuarioPortalForm(forms.Form):
         self.instance = instance
         super().__init__(*args, **kwargs)
         if instance is not None:
-            perfil = (
-                Empleado.objects.select_related("id_sucursal")
-                .filter(pk=instance.pk)
-                .first()
-            )
+            perfil = Empleado.objects.filter(pk=instance.pk).first()
             self.initial.update(
                 {
                     "nombre_completo": instance.nombre_completo,
@@ -252,25 +272,27 @@ class UsuarioPortalForm(forms.Form):
         return cleaned_data
 
     def save(self):
-        if self.instance is None:
-            usuario = Usuario()
-        else:
-            usuario = self.instance
-
+        usuario = self.instance if self.instance is not None else Usuario()
         data = self.cleaned_data
+        rol_nombre = data["rol"].nombre
+
+        estaba_activo = bool(self.instance and self.instance.activo)
         usuario.nombre_completo = data["nombre_completo"]
         usuario.email = data["email"]
         usuario.telefono = data["telefono"] or None
         usuario.id_rol = data["rol"]
         usuario.activo = data["activo"]
         usuario.email_verificado = data["email_verificado"]
-        usuario.is_staff = data["rol"].nombre in {"ADMIN", "EMPLEADO"}
-        usuario.is_superuser = data["rol"].nombre == "ADMIN"
+        usuario.is_staff = rol_nombre in {"ADMIN", "EMPLEADO"}
+        usuario.is_superuser = rol_nombre == "ADMIN"
+
+        if estaba_activo and not data["activo"] and not data["password"]:
+            usuario.token_version = (usuario.token_version or 0) + 1
         if data["password"]:
             usuario.set_password(data["password"])
         usuario.save()
 
-        if data["rol"].nombre == "EMPLEADO":
+        if rol_nombre == "EMPLEADO":
             Empleado.objects.update_or_create(
                 id_empleado=usuario,
                 defaults={
@@ -278,9 +300,127 @@ class UsuarioPortalForm(forms.Form):
                     "cargo": data["cargo"],
                 },
             )
-        elif data["rol"].nombre == "REPARTIDOR":
+        elif rol_nombre == "REPARTIDOR":
             PerfilRepartidor.objects.get_or_create(
                 id_repartidor=usuario,
                 defaults={"estado_operativo": "LIBRE"},
             )
         return usuario
+
+
+class DenunciaResolucionForm(forms.Form):
+    estado = forms.ChoiceField(
+        label="Estado del caso",
+        choices=Denuncia.ESTADO_CHOICES,
+    )
+    prioridad = forms.ChoiceField(
+        label="Prioridad",
+        choices=SOPORTE_PRIORIDAD_CHOICES,
+        initial="MEDIA",
+    )
+    accion_tomada = forms.ChoiceField(
+        label="Acción aplicada",
+        choices=SOPORTE_ACCION_CHOICES,
+        initial="SEGUIMIENTO_CLIENTE",
+    )
+    hora_entrada = forms.TimeField(
+        label="Hora de entrada",
+        input_formats=["%H:%M", "%H:%M:%S"],
+        widget=forms.TimeInput(format="%H:%M", attrs={"type": "time"}),
+    )
+    hora_salida = forms.TimeField(
+        label="Hora de salida",
+        required=False,
+        input_formats=["%H:%M", "%H:%M:%S"],
+        widget=forms.TimeInput(format="%H:%M", attrs={"type": "time"}),
+    )
+    detalle_solucion = forms.CharField(
+        label="Solución brindada",
+        max_length=280,
+        widget=forms.Textarea(
+            attrs={
+                "rows": 3,
+                "maxlength": "280",
+                "placeholder": "Describe de forma clara la revisión realizada y la solución enviada...",
+            }
+        ),
+    )
+
+    def __init__(
+        self,
+        *args,
+        instance: Denuncia | None = None,
+        admin_user=None,
+        hora_entrada_inicial: str | None = None,
+        **kwargs,
+    ):
+        self.instance = instance
+        self.admin_user = admin_user
+        super().__init__(*args, **kwargs)
+
+        ahora = timezone.localtime()
+        previo = parsear_resolucion_soporte(getattr(instance, "resolucion_admin", None))
+
+        if instance is not None:
+            self.initial.setdefault("estado", instance.estado)
+        self.initial.setdefault(
+            "prioridad", previo["prioridad_codigo"] if previo else "MEDIA"
+        )
+        self.initial.setdefault(
+            "accion_tomada",
+            previo["accion_codigo"] if previo else "SEGUIMIENTO_CLIENTE",
+        )
+        self.initial.setdefault(
+            "hora_entrada", hora_entrada_inicial or ahora.strftime("%H:%M")
+        )
+        self.initial.setdefault("hora_salida", ahora.strftime("%H:%M"))
+        if previo and previo["detalle"]:
+            self.initial.setdefault("detalle_solucion", previo["detalle"])
+
+    def clean(self):
+        cleaned_data = super().clean()
+        hora_entrada = cleaned_data.get("hora_entrada")
+        hora_salida = cleaned_data.get("hora_salida")
+        if hora_salida is None:
+            ahora = timezone.localtime()
+            hora_salida = ahora.time().replace(second=0, microsecond=0)
+            cleaned_data["hora_salida"] = hora_salida
+
+        if hora_entrada and hora_salida:
+            if (hora_salida.hour, hora_salida.minute) < (hora_entrada.hour, hora_entrada.minute):
+                self.add_error(
+                    "hora_salida",
+                    "La hora de salida debe ser igual o posterior a la hora de entrada.",
+                )
+
+        estado = cleaned_data.get("estado")
+        detalle = (cleaned_data.get("detalle_solucion") or "").strip()
+        if estado in {"RESUELTO", "DESESTIMADA"} and len(detalle) < 10:
+            self.add_error(
+                "detalle_solucion",
+                "Detalla la verificación y la solución brindada (mínimo 10 caracteres).",
+            )
+        cleaned_data["detalle_solucion"] = detalle
+        return cleaned_data
+
+    def save(self) -> Denuncia:
+        if self.instance is None:
+            raise ValueError("DenunciaResolucionForm requiere una instancia de Denuncia.")
+        ahora = timezone.localtime()
+        admin_nombre = (
+            getattr(self.admin_user, "nombre_completo", "")
+            or getattr(self.admin_user, "email", "")
+            or "Administrador"
+        )
+        self.instance.estado = self.cleaned_data["estado"]
+        self.instance.resolucion_admin = formatear_resolucion_soporte(
+            admin_nombre=admin_nombre,
+            fecha_str=ahora.strftime("%d/%m/%Y"),
+            hora_entrada=self.cleaned_data["hora_entrada"],
+            hora_salida=self.cleaned_data["hora_salida"],
+            prioridad=self.cleaned_data["prioridad"],
+            accion_tomada=self.cleaned_data["accion_tomada"],
+            detalle_solucion=self.cleaned_data["detalle_solucion"],
+        )
+        self.instance.save(update_fields=["estado", "resolucion_admin"])
+        return self.instance

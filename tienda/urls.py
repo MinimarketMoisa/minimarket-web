@@ -1,4 +1,4 @@
-﻿"""URLs de la app tienda (rutas API DRF)."""
+"""URLs del portal web (empleados y administraci\u00f3n)."""
 
 from django.urls import path
 from . import views
@@ -16,7 +16,15 @@ urlpatterns = [
         views.pedido_admin_detalle,
         name="admin-pedido-detalle",
     ),
+    path("administracion/reportes/", views.reportes_admin, name="admin-reportes"),
+    path("administracion/denuncias/", views.denuncias_admin, name="admin-denuncias"),
+    path(
+        "administracion/denuncias/<int:id_denuncia>/",
+        views.denuncia_detalle_admin,
+        name="admin-denuncia-detalle",
+    ),
     path("administracion/sucursales/", views.sucursales_admin, name="admin-sucursales"),
+
     path(
         "administracion/sucursales/crear/",
         views.sucursal_admin_form,
@@ -118,7 +126,9 @@ urlpatterns = [
         views.accion_pedido,
         name="pedido-accion",
     ),
+    path("empleados/reportes/", views.reportes_empleado, name="empleado-reportes"),
     path("empleados/inventario/", views.inventario_empleado, name="inventario"),
+
     path(
         "empleados/inventario/<int:id_producto>/",
         views.editar_inventario,

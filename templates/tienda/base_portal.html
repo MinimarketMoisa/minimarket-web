@@ -1,0 +1,65 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{% block portal_default_title %}Operaciones{% endblock %}{% endblock %} | Minimarket</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            mm: {
+              ink: '#172b25',
+              muted: '#6b7d76',
+              line: '#e2eae6',
+              canvas: '#f4f8f5',
+              green: '#9caa17',
+              'green-dark': '#707d0c',
+              'green-soft': '#f3f5df',
+              orange: '#f67300',
+              'orange-dark': '#cf5e00',
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <link rel="stylesheet" href="{% static 'tienda/empleado.css' %}?v=20261104">
+  {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-mm-canvas text-mm-ink antialiased">
+  <div class="app-shell">
+    {% block portal_sidebar %}{% endblock %}
+    <div class="app-main {% block main_extra_class %}{% endblock %}">
+      <header class="topbar">
+        <div class="flex items-center gap-2.5">
+          <span class="inline-block h-2 w-2 rounded-full bg-mm-green"></span>
+          <span class="font-medium text-mm-muted">{% block portal_header_label %}Portal Minimarket{% endblock %}</span>
+        </div>
+        {% if user.is_authenticated %}
+          <div class="flex items-center gap-2.5">
+            <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-mm-green-soft text-xs font-bold text-mm-green-dark">
+              {{ user.nombre_completo|default:"M"|slice:":1"|upper }}
+            </span>
+            <span class="font-semibold text-mm-ink">{{ user.nombre_completo }}</span>
+          </div>
+        {% endif %}
+      </header>
+      <main class="portal-container w-full px-4 sm:px-7 pt-6 pb-14">
+        {% if messages %}
+          <section class="messages" aria-live="polite">
+            {% for message in messages %}
+              <p class="message {{ message.tags }}">{{ message }}</p>
+            {% endfor %}
+          </section>
+        {% endif %}
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+</body>
+</html>
+
