@@ -5,36 +5,56 @@
     <div>
       <p class="eyebrow">VISTA GENERAL · {{ hoy|date:"d/m/Y" }}</p>
       <h1>Operación de Minimarket</h1>
-      <p class="muted text-sm">Resumen consolidado en tiempo real de todas las sucursales.</p>
+      <p class="muted text-sm">
+        {% if sucursal_seleccionada %}
+          Resumen operativo filtrado por sucursal: <strong class="text-mm-ink">{{ sucursal_seleccionada.nombre }}</strong>
+        {% else %}
+          Resumen consolidado en tiempo real de todas las sucursales.
+        {% endif %}
+      </p>
     </div>
+    <form method="get" class="filter-bar mb-0 py-3 px-4">
+      <label class="field compact">
+        <span class="text-xs">Filtrar por sucursal</span>
+        <select name="id_sucursal" onchange="this.form.submit()">
+          <option value="">Todas las sucursales</option>
+          {% for suc in sucursales_todas %}
+            <option value="{{ suc.pk }}" {% if suc.pk|stringformat:"s" == sucursal_filtro %}selected{% endif %}>{{ suc.nombre }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% if sucursal_filtro %}
+        <a class="button secondary small" href="{% url 'tienda:admin-panel' %}">Ver todas</a>
+      {% endif %}
+    </form>
   </section>
 
   <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 mb-6">
-    <article class="stat-card border-l-4 border-l-mm-green">
-      <span class="stat-label">Ventas entregadas</span>
+    <a class="stat-card border-l-4 border-l-mm-green" href="{% url 'tienda:admin-reportes' %}{% if sucursal_filtro %}?id_sucursal={{ sucursal_filtro }}{% endif %}">
+      <span class="stat-label">Ventas confirmadas</span>
       <strong class="text-mm-ink">$ {{ ventas_entregadas|floatformat:2 }}</strong>
-      <span class="stat-foot">Total histórico consolidado</span>
-    </article>
-    <article class="stat-card">
+      <span class="stat-foot">Pedidos entregados y pagos Wompi/Transferencia →</span>
+    </a>
+    <a class="stat-card" href="{% url 'tienda:admin-pedidos' %}{% if sucursal_filtro %}?id_sucursal={{ sucursal_filtro }}{% endif %}">
       <span class="stat-label">Pedidos de hoy</span>
       <strong>{{ pedidos_hoy }}</strong>
-      <span class="stat-foot">De {{ total_pedidos }} pedidos registrados</span>
-    </article>
-    <article class="stat-card border-l-4 border-l-mm-orange">
+      <span class="stat-foot">De {{ total_pedidos }} pedidos registrados →</span>
+    </a>
+    <a class="stat-card border-l-4 border-l-mm-orange" href="{% url 'tienda:admin-pedidos' %}?estado=PENDIENTE{% if sucursal_filtro %}&id_sucursal={{ sucursal_filtro }}{% endif %}">
       <span class="stat-label">Pendientes de preparación</span>
       <strong>{{ pendientes }}</strong>
-      <span class="stat-foot">{{ preparados }} preparados · {{ en_ruta }} en ruta</span>
-    </article>
-    <article class="stat-card">
+      <span class="stat-foot">{{ preparados }} preparados · {{ en_ruta }} en ruta →</span>
+    </a>
+    <a class="stat-card" href="{% url 'tienda:admin-pedidos' %}{% if sucursal_filtro %}?id_sucursal={{ sucursal_filtro }}{% endif %}">
       <span class="stat-label">Pagos pendientes</span>
       <strong>{{ pagos_pendientes }}</strong>
-      <span class="stat-foot">Pedidos aún sin pago confirmado</span>
-    </article>
-    <article class="stat-card">
-      <span class="stat-label">Existencias bajas</span>
+      <span class="stat-foot">Pedidos aún sin pago confirmado →</span>
+    </a>
+    <a class="stat-card border-l-4 border-l-amber-500" href="{% url 'tienda:admin-inventario' %}?bajo=1{% if sucursal_filtro %}&id_sucursal={{ sucursal_filtro }}{% endif %}">
+      <span class="stat-label">Productos en bajo stock</span>
       <strong>{{ inventario_bajo }}</strong>
-      <span class="stat-foot">Registros con 5 unidades o menos</span>
-    </article>
+      <span class="stat-foot">Con {{ umbral_bajo_stock }} unidades o menos ({{ inventario_agotado }} agotados) →</span>
+    </a>
     <article class="stat-card">
       <span class="stat-label">Repartidores libres</span>
       <strong>{{ repartidores_libres }}</strong>
@@ -42,13 +62,85 @@
     </article>
   </section>
 
+  <!-- Panel de Productos con Bajo Stock -->
   <section class="panel">
     <div class="section-heading">
       <div>
-        <p class="eyebrow">COBERTURA NACIONAL</p>
-        <h2>Rendimiento por sucursal</h2>
+        <p class="eyebrow">ALERTA DE ABASTECIMIENTO</p>
+        <h2>Productos en bajo stock {% if sucursal_seleccionada %}({{ sucursal_seleccionada.nombre }}){% endif %}</h2>
       </div>
-      <span class="badge">{{ sucursales|length }} sucursales</span>
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="badge {% if inventario_bajo > 0 %}pendiente{% else %}aprobado{% endif %}">
+          {{ inventario_bajo }} alerta{{ inventario_bajo|pluralize:"s" }} (≤ {{ umbral_bajo_stock }} uds)
+        </span>
+        <a class="button secondary small" href="{% url 'tienda:admin-stock-general' %}?bajo=1{% if sucursal_filtro %}&id_sucursal={{ sucursal_filtro }}{% endif %}">
+          Stock general por sucursal
+        </a>
+        <a class="button primary small" href="{% url 'tienda:admin-inventario' %}?bajo=1{% if sucursal_filtro %}&id_sucursal={{ sucursal_filtro }}{% endif %}">
+          Ver todos ({{ inventario_bajo }}) →
+        </a>
+      </div>
+    </div>
+    {% if productos_bajo_stock %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Categoría</th>
+              <th>Sucursal (Dónde está)</th>
+              <th>Existencias</th>
+              <th>Estado</th>
+              <th>Vencimiento</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in productos_bajo_stock %}
+              <tr>
+                <td>
+                  <strong class="text-mm-ink">{{ item.id_producto.nombre }}</strong>
+                  <div class="text-xs text-mm-muted">{{ item.id_producto.codigo_barras|default:"Sin código" }}</div>
+                </td>
+                <td>{{ item.id_producto.id_categoria.nombre }}</td>
+                <td>
+                  <strong class="text-mm-ink">{{ item.id_sucursal.nombre }}</strong>
+                </td>
+                <td>
+                  <span class="stock low">{{ item.stock_disponible }} uds</span>
+                </td>
+                <td>
+                  {% if item.stock_disponible == 0 %}
+                    <span class="badge cancelado">Agotado</span>
+                  {% else %}
+                    <span class="badge pendiente">Bajo stock</span>
+                  {% endif %}
+                </td>
+                <td class="text-mm-muted">{{ item.fecha_vencimiento|default:"—" }}</td>
+                <td>
+                  <a class="button secondary small" href="{% url 'tienda:admin-inventario-editar' item.pk %}">Reabastecer</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty">Excelente: no hay productos con existencias bajas (≤ {{ umbral_bajo_stock }} unidades) en este momento.</p>
+    {% endif %}
+  </section>
+
+  <!-- Rendimiento por sucursal -->
+  <section class="panel">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">COBERTURA OPERATIVA</p>
+        <h2>Rendimiento y stock por sucursal</h2>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="badge">{{ sucursales|length }} sucursal{{ sucursales|length|pluralize:"es" }}</span>
+        <a class="button secondary small" href="{% url 'tienda:admin-stock-general' %}">Ver dónde están los productos →</a>
+      </div>
     </div>
     {% if sucursales %}
       <div class="table-wrap">
@@ -61,7 +153,9 @@
               <th>Pendientes</th>
               <th>Preparados</th>
               <th>En ruta</th>
-              <th>Ventas entregadas</th>
+              <th>Bajo stock</th>
+              <th>Ventas confirmadas</th>
+              <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -82,7 +176,22 @@
                 <td>{{ sucursal.pedidos_pendientes }}</td>
                 <td>{{ sucursal.pedidos_preparados }}</td>
                 <td>{{ sucursal.pedidos_en_ruta }}</td>
+                <td>
+                  {% if sucursal.bajo_stock_count > 0 %}
+                    <a href="{% url 'tienda:admin-inventario' %}?id_sucursal={{ sucursal.pk }}&bajo=1" class="badge pendiente">
+                      {{ sucursal.bajo_stock_count }} bajo stock
+                    </a>
+                  {% else %}
+                    <span class="badge aprobado">Óptimo</span>
+                  {% endif %}
+                </td>
                 <td class="font-semibold text-mm-ink">$ {{ sucursal.ventas_entregadas|default:0|floatformat:2 }}</td>
+                <td>
+                  <div class="flex flex-wrap gap-1.5">
+                    <a class="button secondary small" href="{% url 'tienda:admin-pedidos' %}?id_sucursal={{ sucursal.pk }}">Pedidos</a>
+                    <a class="button secondary small" href="{% url 'tienda:admin-inventario' %}?id_sucursal={{ sucursal.pk }}">Inventario</a>
+                  </div>
+                </td>
               </tr>
             {% endfor %}
           </tbody>

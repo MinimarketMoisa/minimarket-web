@@ -1,0 +1,182 @@
+{% extends base_template|default:"tienda/admin/base.html" %}
+{% block title %}Stock general por sucursal{% endblock %}
+{% block content %}
+  <section class="page-heading">
+    <div>
+      <p class="eyebrow">INVENTARIO CONSOLIDADO</p>
+      <h1>Stock general de productos</h1>
+      <p class="muted text-sm">
+        Existencias totales por producto y ubicación detallada en cada sucursal
+        {% if sucursal_seleccionada %}
+          · Filtrado por <strong class="text-mm-ink">{{ sucursal_seleccionada.nombre }}</strong>
+        {% endif %}
+      </p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2.5">
+      <a class="button secondary" href="{% url 'tienda:admin-inventario' %}{% if sucursal_filtro %}?id_sucursal={{ sucursal_filtro }}{% endif %}">
+        Vista por registro
+      </a>
+      <a class="button primary" href="{% url 'tienda:admin-inventario-crear' %}">+ Asignar stock</a>
+    </div>
+  </section>
+
+  <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 mb-6">
+    <article class="stat-card min-h-0 py-4 px-5 border-l-4 border-l-mm-green">
+      <span class="stat-label">Unidades totales</span>
+      <strong class="text-2xl my-1">{{ resumen_stock.unidades_totales|default:0 }}</strong>
+      <span class="stat-foot">En {{ sucursales|length }} sucursales activas</span>
+    </article>
+    <article class="stat-card min-h-0 py-4 px-5">
+      <span class="stat-label">Productos en catálogo</span>
+      <strong class="text-2xl my-1">{{ resumen_stock.total_productos|default:0 }}</strong>
+      <span class="stat-foot">Productos activos evaluados</span>
+    </article>
+    <a class="stat-card min-h-0 py-4 px-5 border-l-4 border-l-mm-orange" href="?bajo=1{% if sucursal_filtro %}&id_sucursal={{ sucursal_filtro }}{% endif %}{% if categoria_filtro %}&id_categoria={{ categoria_filtro }}{% endif %}">
+      <span class="stat-label">Registros en bajo stock</span>
+      <strong class="text-2xl my-1">{{ resumen_stock.registros_bajo_stock|default:0 }}</strong>
+      <span class="stat-foot">Con {{ umbral_bajo_stock }} unidades o menos →</span>
+    </a>
+    <a class="stat-card min-h-0 py-4 px-5 border-l-4 border-l-red-500" href="?bajo=agotado{% if sucursal_filtro %}&id_sucursal={{ sucursal_filtro }}{% endif %}{% if categoria_filtro %}&id_categoria={{ categoria_filtro }}{% endif %}">
+      <span class="stat-label">Registros agotados</span>
+      <strong class="text-2xl my-1">{{ resumen_stock.registros_agotados|default:0 }}</strong>
+      <span class="stat-foot">Con 0 unidades disponibles →</span>
+    </a>
+  </section>
+
+  <section class="panel">
+    <form method="get" class="filter-bar bg-mm-canvas/50">
+      <label class="field">
+        <span>Buscar producto</span>
+        <input type="search" name="q" value="{{ busqueda }}" placeholder="Nombre o código de barras...">
+      </label>
+      <label class="field compact">
+        <span>Sucursal</span>
+        <select name="id_sucursal" onchange="this.form.submit()">
+          <option value="">Todas las sucursales</option>
+          {% for suc in sucursales %}
+            <option value="{{ suc.pk }}" {% if suc.pk|stringformat:"s" == sucursal_filtro %}selected{% endif %}>{{ suc.nombre }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="field compact">
+        <span>Categoría</span>
+        <select name="id_categoria" onchange="this.form.submit()">
+          <option value="">Todas las categorías</option>
+          {% for cat in categorias %}
+            <option value="{{ cat.pk }}" {% if cat.pk|stringformat:"s" == categoria_filtro %}selected{% endif %}>{{ cat.nombre }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="field compact">
+        <span>Nivel de stock</span>
+        <select name="bajo" onchange="this.form.submit()">
+          <option value="">Todos los niveles</option>
+          <option value="1" {% if stock_filtro == "1" %}selected{% endif %}>Bajo stock (≤ {{ umbral_bajo_stock }})</option>
+          <option value="agotado" {% if stock_filtro == "agotado" %}selected{% endif %}>Agotados (0)</option>
+        </select>
+      </label>
+      <div class="flex gap-2">
+        <button class="button primary" type="submit">Filtrar</button>
+        {% if busqueda or sucursal_filtro or categoria_filtro or stock_filtro %}
+          <a class="button secondary" href="{% url 'tienda:admin-stock-general' %}">Limpiar</a>
+        {% endif %}
+      </div>
+    </form>
+
+    {% if productos %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Categoría</th>
+              <th>Precio</th>
+              <th>Stock Total</th>
+              <th>Ubicación por Sucursal (Dónde están)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for prod in productos %}
+              <tr>
+                <td>
+                  <strong class="text-mm-ink">{{ prod.nombre }}</strong>
+                  <div class="text-xs text-mm-muted">{{ prod.codigo_barras|default:"Sin código" }}</div>
+                </td>
+                <td>{{ prod.categoria }}</td>
+                <td class="whitespace-nowrap font-medium">$ {{ prod.precio_base|floatformat:2 }}</td>
+                <td class="whitespace-nowrap">
+                  <div class="flex items-center gap-2">
+                    <span class="stock {% if prod.stock_total <= umbral_bajo_stock %}low{% endif %}">
+                      {{ prod.stock_total }} uds
+                    </span>
+                    {% if prod.stock_total == 0 %}
+                      <span class="badge cancelado">Agotado</span>
+                    {% elif prod.tiene_bajo_stock %}
+                      <span class="badge pendiente">Bajo stock</span>
+                    {% endif %}
+                  </div>
+                </td>
+                <td>
+                  <div class="flex flex-wrap gap-1.5">
+                    {% for ub in prod.ubicaciones %}
+                      {% if ub.id_inventario %}
+                        <a href="{% url 'tienda:admin-inventario-editar' ub.id_inventario %}"
+                           title="Editar stock en {{ ub.sucursal }}"
+                           class="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition
+                           {% if ub.stock == 0 %}
+                             border-red-200 bg-red-50 text-red-800 hover:bg-red-100
+                           {% elif ub.es_bajo %}
+                             border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100
+                           {% else %}
+                             border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100
+                           {% endif %}">
+                          <span>{{ ub.sucursal }}:</span>
+                          <strong>{{ ub.stock }}</strong>
+                          {% if ub.stock == 0 %}
+                            <span class="text-[10px] uppercase font-extrabold">Agotado</span>
+                          {% elif ub.es_bajo %}
+                            <span class="text-[10px] uppercase font-extrabold">Bajo</span>
+                          {% endif %}
+                        </a>
+                      {% else %}
+                        <span class="inline-flex items-center gap-1.5 rounded-lg border border-mm-line bg-mm-canvas px-2.5 py-1 text-xs text-mm-muted">
+                          <span>{{ ub.sucursal }}:</span>
+                          <strong>0</strong>
+                          <span class="text-[10px] uppercase font-bold">Sin registro</span>
+                        </span>
+                      {% endif %}
+                    {% endfor %}
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if page_obj %}
+        <nav class="pagination justify-between flex-wrap" aria-label="Paginación">
+          <span class="text-xs text-mm-muted">
+            Mostrando <strong class="text-mm-ink">{{ page_obj.start_index }}–{{ page_obj.end_index }}</strong>
+            de <strong class="text-mm-ink">{{ page_obj.paginator.count }}</strong> producto{{ page_obj.paginator.count|pluralize:"s" }} (25 por página)
+          </span>
+          <div class="flex items-center gap-2">
+            {% if page_obj.has_previous %}
+              <a class="button secondary small" href="?{% if query_base %}{{ query_base }}&{% endif %}page={{ page_obj.previous_page_number }}">← Anterior</a>
+            {% else %}
+              <span class="button secondary small opacity-45 pointer-events-none" aria-disabled="true">← Anterior</span>
+            {% endif %}
+            <span class="px-2 text-xs font-semibold text-mm-ink">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+            {% if page_obj.has_next %}
+              <a class="button secondary small" href="?{% if query_base %}{{ query_base }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente →</a>
+            {% else %}
+              <span class="button secondary small opacity-45 pointer-events-none" aria-disabled="true">Siguiente →</span>
+            {% endif %}
+          </div>
+        </nav>
+      {% endif %}
+    {% else %}
+      <p class="empty">No se encontraron productos con los filtros seleccionados.</p>
+    {% endif %}
+  </section>
+{% endblock %}

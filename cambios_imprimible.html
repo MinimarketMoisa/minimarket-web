@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Informe de Cambios · minimarket-web</title>
+  <style>
+    :root {
+      --green: #9caa17;
+      --green-dark: #707d0c;
+      --green-soft: #f3f5df;
+      --orange: #f67300;
+      --orange-dark: #cf5e00;
+      --ink: #172b25;
+      --muted: #5b6b65;
+      --canvas: #f4f8f5;
+      --line: #dce6e1;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 20px;
+      background: var(--canvas);
+      color: var(--ink);
+      font-family: "Plus Jakarta Sans", "Inter", system-ui, -apple-system, sans-serif;
+      line-height: 1.5;
+    }
+    .page {
+      max-width: 960px;
+      margin: 0 auto;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 18px 40px -20px rgba(23, 43, 37, 0.18);
+    }
+    .toolbar {
+      max-width: 960px;
+      margin: 0 auto 14px;
+      display: flex;
+      justify-content: flex-end;
+    }
+    .btn-print {
+      background: var(--orange);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      padding: 10px 18px;
+      font-weight: 800;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .cover {
+      background: linear-gradient(135deg, var(--ink) 0%, #203c33 58%, var(--green-dark) 100%);
+      color: #fff;
+      padding: 32px 36px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+    .cover-badge {
+      display: inline-block;
+      background: var(--orange);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 4px 12px;
+      border-radius: 999px;
+      margin-bottom: 10px;
+    }
+    .cover h1 { margin: 0; font-size: 26px; line-height: 1.2; }
+    .cover p { margin: 8px 0 0; font-size: 13px; color: rgba(255,255,255,0.85); }
+    .logo-box {
+      background: #fff;
+      border-radius: 18px;
+      padding: 12px;
+      width: 84px;
+      height: 84px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .logo-box img { width: 100%; height: 100%; object-fit: contain; }
+    .content { padding: 30px 36px 38px; }
+    h2 {
+      font-size: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--green-dark);
+      border-bottom: 2px solid var(--green-soft);
+      padding-bottom: 6px;
+      margin: 28px 0 14px;
+    }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    .kpi {
+      background: var(--canvas);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .kpi .num { font-size: 20px; font-weight: 800; color: var(--ink); }
+    .kpi .lbl { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    .arch {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto 1fr;
+      align-items: center;
+      gap: 10px;
+      background: var(--green-soft);
+      border: 1px solid #d8dfaf;
+      border-radius: 16px;
+      padding: 18px;
+      text-align: center;
+      font-size: 12px;
+    }
+    .arch-node {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .arch-node strong { display: block; font-size: 13px; color: var(--ink); }
+    .arch-arrow { font-size: 18px; font-weight: 800; color: var(--orange-dark); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+      margin-top: 8px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: var(--canvas);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--ink);
+    }
+    .swatches {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+    }
+    .swatch {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+      font-size: 11px;
+      text-align: center;
+    }
+    .swatch-bar { height: 28px; }
+    .swatch-txt { padding: 6px; font-family: monospace; font-weight: 700; }
+    code {
+      background: #eef3f0;
+      padding: 1px 5px;
+      border-radius: 5px;
+      font-size: 11.5px;
+    }
+    .footer {
+      margin-top: 26px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+      font-size: 11px;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+    }
+    @media print {
+      body { background: #fff; padding: 0; }
+      .toolbar { display: none; }
+      .page { border: none; box-shadow: none; max-width: 100%; border-radius: 0; }
+      .cover, .kpi, .arch, th, .swatch-bar { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button class="btn-print" onclick="window.print()">Guardar / Imprimir como PDF</button>
+  </div>
+
+  <div class="page">
+    <header class="cover">
+      <div>
+        <span class="cover-badge">Django 6 · Portal Administrativo y Sucursales</span>
+        <h1>Informe Ejecutivo de Cambios — minimarket-web</h1>
+        <p>Optimización SQL para VPS (64.236.138.169), integración de <strong>codigo_pedido</strong>, delegación de Tracking GPS a FastAPI y conexión en vivo con <strong>minimarket-cliente</strong>.</p>
+      </div>
+      <div class="logo-box">
+        <img src="tienda/static/tienda/logo-minimarket.png" alt="Logo MiniMarket">
+      </div>
+    </header>
+
+    <div class="content">
+      <h2>1. Indicadores Clave de Optimización</h2>
+      <div class="kpi-grid">
+        <div class="kpi">
+          <div class="num">PED-XXXXXX</div>
+          <div class="lbl">Código comercial único integrado en tablas, búsquedas y Admin</div>
+        </div>
+        <div class="kpi">
+          <div class="num">7 → 1 SQL</div>
+          <div class="lbl">Reducción de consultas en métricas mensuales y login en 1 JOIN</div>
+        </div>
+        <div class="kpi">
+          <div class="num">25 / pág.</div>
+          <div class="lbl">Paginación SQL uniforme en todos los listados del sistema</div>
+        </div>
+        <div class="kpi">
+          <div class="num">100% Vivo</div>
+          <div class="lbl">Conectado en tiempo real con FastAPI y Tienda Cliente Web</div>
+        </div>
+      </div>
+
+      <h2>2. Arquitectura del Ecosistema Conectado</h2>
+      <div class="arch">
+        <div class="arch-node">
+          <strong>minimarket-cliente (HTML/JS)</strong>
+          Catálogo Supermercado<br><code>canal = "WEB"</code>
+        </div>
+        <div class="arch-arrow">⇄</div>
+        <div class="arch-node">
+          <strong>minimarket-api + PostgreSQL</strong>
+          REST API (FastAPI) y esquema<br>compartido <code>minimarket_db</code>
+        </div>
+        <div class="arch-arrow">⇄</div>
+        <div class="arch-node">
+          <strong>minimarket-web (:8080)</strong>
+          Gestión Admin, Sucursales,<br>Inventario y Soporte Técnico
+        </div>
+      </div>
+
+      <h2>3. Paleta Corporativa e Interfaz Tailwind CSS</h2>
+      <div class="swatches">
+        <div class="swatch"><div class="swatch-bar" style="background:#9caa17"></div><div class="swatch-txt">#9caa17</div></div>
+        <div class="swatch"><div class="swatch-bar" style="background:#707d0c"></div><div class="swatch-txt">#707d0c</div></div>
+        <div class="swatch"><div class="swatch-bar" style="background:#f3f5df"></div><div class="swatch-txt">#f3f5df</div></div>
+        <div class="swatch"><div class="swatch-bar" style="background:#f67300"></div><div class="swatch-txt">#f67300</div></div>
+        <div class="swatch"><div class="swatch-bar" style="background:#172b25"></div><div class="swatch-txt">#172b25</div></div>
+        <div class="swatch"><div class="swatch-bar" style="background:#f4f8f5"></div><div class="swatch-txt">#f4f8f5</div></div>
+      </div>
+
+      <h2>4. Detalle Comparativo de los Últimos Cambios</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Módulo / Área</th>
+            <th>Antes</th>
+            <th>Ahora (Actualizado)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Código de Pedido</strong></td>
+            <td>Se mostraba únicamente el <code>id_pedido</code> numérico interno.</td>
+            <td>Mapeo completo de <code>codigo_pedido</code> en <code>models.py</code>, <code>admin.py</code>, buscadores y plantillas de Admin, Empleados y Reporte.</td>
+          </tr>
+          <tr>
+            <td><strong>Tracking GPS</strong></td>
+            <td>Vistas duplicadas en Django + dependencia <code>pyjwt</code>.</td>
+            <td>Retirado limpiamente de Django; el seguimiento GPS en tiempo real es gestionado por <strong>FastAPI</strong>.</td>
+          </tr>
+          <tr>
+            <td><strong>Soporte Técnico (Reporte)</strong></td>
+            <td>Campo simple sin control de tiempos ni estructura visual.</td>
+            <td>Diseño en tarjetas limpias con registro automático de <strong>Hora de entrada/salida</strong>, duración, prioridad y acción aplicada.</td>
+          </tr>
+          <tr>
+            <td><strong>Conexión Tienda Cliente</strong></td>
+            <td>Solo recibía órdenes creadas desde la aplicación móvil.</td>
+            <td>Gestiona al instante los pedidos <code>WEB</code> creados vía FastAPI desde el frontend HTML/JS <code>minimarket-cliente</code>.</td>
+          </tr>
+          <tr>
+            <td><strong>Rendimiento y VPS</strong></td>
+            <td>Conexiones efímeras, DRF/Pillow sin uso y sin WhiteNoise.</td>
+            <td><code>CONN_MAX_AGE=60</code>, <code>WhiteNoise</code>, corrección de <code>token_version</code> y despliegue activo en <code>64.236.138.169:8080</code>.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="footer">
+        <span>MiniMarket · Documento Técnico minimarket-web</span>
+        <span>Actualizado: Noviembre 2026</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+

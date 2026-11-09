@@ -35,6 +35,17 @@
 
 <section class="panel">
   <form method="get" class="filter-bar bg-mm-canvas/50">
+    {% if sucursales %}
+      <label class="field compact">
+        <span>Sucursal</span>
+        <select name="id_sucursal" onchange="this.form.submit()">
+          <option value="">Todas las sucursales</option>
+          {% for suc in sucursales %}
+            <option value="{{ suc.pk }}" {% if suc.pk|stringformat:"s" == sucursal_filtro %}selected{% endif %}>{{ suc.nombre }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    {% endif %}
     <label class="field compact">
       <span>Filtrar por estado</span>
       <select name="estado" onchange="this.form.submit()">
@@ -51,7 +62,7 @@
     </label>
     <div class="flex gap-2">
       <button class="button primary" type="submit">Buscar</button>
-      {% if busqueda or estado_filtro %}<a class="button secondary" href="?">Limpiar</a>{% endif %}
+      {% if busqueda or estado_filtro or sucursal_filtro %}<a class="button secondary" href="?">Limpiar</a>{% endif %}
     </div>
   </form>
 

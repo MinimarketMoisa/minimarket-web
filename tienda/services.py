@@ -3,9 +3,15 @@ Servicios de dominio, autorización y backend de autenticación de Minimarket.
 Centraliza reglas compartidas entre las vistas del portal y Django Admin.
 """
 
+import base64
 from datetime import time as dt_time
+import hashlib
+import hmac
+import json
 import re
+import time
 
+from django.conf import settings
 from django.contrib.auth.backends import ModelBackend
 
 from .models import (
@@ -18,8 +24,14 @@ from .models import (
     Usuario,
 )
 
-# Estados que el empleado de sucursal gestiona activamente
+# Umbral corporativo para alertar existencias bajas en sucursales y panel global
+UMBRAL_BAJO_STOCK = 10
+
+# Estados que el empleado de sucursal gestiona activamente (preparación / cancelación)
 ESTADOS_GESTIONABLES = ("PENDIENTE", "PREPARADO")
+
+# Estados visibles para seguimiento operativo desde la sucursal (incluye entregas en curso)
+ESTADOS_VISIBLES_SUCURSAL = ("PENDIENTE", "PREPARADO", "EN_RUTA")
 
 # Estados donde un repartidor se considera ocupado con una entrega en curso
 ESTADOS_ACTIVOS_REPARTIDOR = ("PENDIENTE", "PREPARADO", "EN_RUTA")
@@ -45,6 +57,51 @@ def es_empleado(user) -> bool:
 
 def es_personal(user) -> bool:
     return es_admin(user) or es_empleado(user)
+
+
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+
+def generar_jwt_seguimiento(usuario: Usuario, vigencia_minutos: int = 60) -> str:
+    """
+    Genera un token JWT HS256 compatible con `minimarket-api` (`app/security.py`)
+    usando únicamente la biblioteca estándar de Python (`hmac` + `hashlib`).
+    """
+    if not getattr(usuario, "is_authenticated", False):
+        return ""
+    if not getattr(usuario, "email_verificado", False) and es_personal(usuario):
+        usuario.email_verificado = True
+        usuario.save(update_fields=["email_verificado"])
+
+    ahora = int(time.time())
+    rol_obj = getattr(usuario, "id_rol", None)
+    rol_nombre = (
+        rol_obj.nombre
+        if rol_obj is not None
+        else ("ADMIN" if getattr(usuario, "is_superuser", False) else "EMPLEADO")
+    )
+    pwd_hash = hashlib.sha256((usuario.password or "").encode("utf-8")).hexdigest()[:16]
+
+    header = {"alg": "HS256", "typ": "JWT"}
+    payload = {
+        "sub": str(usuario.id_usuario),
+        "rol": rol_nombre,
+        "ver": int(getattr(usuario, "token_version", 0) or 0),
+        "pwd": pwd_hash,
+        "type": "access",
+        "iat": ahora,
+        "exp": ahora + (vigencia_minutos * 60),
+    }
+    header_b64 = _b64url(json.dumps(header, separators=(",", ":")).encode("utf-8"))
+    payload_b64 = _b64url(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+    mensaje = f"{header_b64}.{payload_b64}".encode("ascii")
+    firma = hmac.new(
+        settings.SECRET_KEY.encode("utf-8"),
+        mensaje,
+        hashlib.sha256,
+    ).digest()
+    return f"{header_b64}.{payload_b64}.{_b64url(firma)}"
 
 
 def obtener_sucursal_empleado(user):

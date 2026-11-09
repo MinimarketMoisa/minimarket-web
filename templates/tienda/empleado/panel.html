@@ -9,21 +9,26 @@
     </div>
   </section>
 
-  <section class="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-6">
+  <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 mb-6">
     <a class="stat-card border-l-4 border-l-mm-orange" href="{% url 'tienda:pedidos' %}?estado=PENDIENTE">
       <span class="stat-label">Por preparar</span>
       <strong>{{ pedidos_pendientes }}</strong>
       <span class="stat-foot">Pedidos pendientes →</span>
     </a>
     <a class="stat-card border-l-4 border-l-sky-500" href="{% url 'tienda:pedidos' %}?estado=PREPARADO">
-      <span class="stat-label">Listos</span>
+      <span class="stat-label">Listos en tienda</span>
       <strong>{{ pedidos_preparados }}</strong>
       <span class="stat-foot">Preparados en sucursal →</span>
     </a>
+    <a class="stat-card border-l-4 border-l-violet-500" href="{% url 'tienda:pedidos' %}?estado=EN_RUTA">
+      <span class="stat-label">En reparto GPS</span>
+      <strong>{{ pedidos_en_ruta|default:0 }}</strong>
+      <span class="stat-foot">En ruta hacia el cliente →</span>
+    </a>
     <a class="stat-card border-l-4 border-l-amber-500" href="{% url 'tienda:inventario' %}?bajo=1">
-      <span class="stat-label">Atención de stock</span>
+      <span class="stat-label">Productos en bajo stock</span>
       <strong>{{ total_productos_bajos }}</strong>
-      <span class="stat-foot">Con 5 unidades o menos →</span>
+      <span class="stat-foot">Con {{ umbral_bajo_stock|default:10 }} unidades o menos →</span>
     </a>
   </section>
 
@@ -31,9 +36,9 @@
     <div class="section-heading">
       <div>
         <p class="eyebrow">INVENTARIO DE SUCURSAL</p>
-        <h2>Existencias bajas</h2>
+        <h2>Productos en bajo stock ({{ sucursal.nombre }})</h2>
       </div>
-      <a class="button secondary small" href="{% url 'tienda:inventario' %}?bajo=1">Ver todo el inventario</a>
+      <a class="button secondary small" href="{% url 'tienda:inventario' %}?bajo=1">Ver todo el bajo stock ({{ total_productos_bajos }}) →</a>
     </div>
     {% if productos_bajos %}
       <div class="table-wrap">
@@ -41,7 +46,9 @@
           <thead>
             <tr>
               <th>Producto</th>
+              <th>Categoría</th>
               <th>Existencias</th>
+              <th>Estado</th>
               <th>Vencimiento</th>
               <th></th>
             </tr>
@@ -49,8 +56,19 @@
           <tbody>
             {% for existencia in productos_bajos %}
               <tr>
-                <td class="font-semibold text-mm-ink">{{ existencia.nombre }}</td>
-                <td><span class="stock low">{{ existencia.stock_disponible }}</span></td>
+                <td>
+                  <strong class="text-mm-ink">{{ existencia.nombre }}</strong>
+                  <div class="text-xs text-mm-muted">{{ existencia.codigo_barras|default:"Sin código" }}</div>
+                </td>
+                <td>{{ existencia.id_categoria.nombre }}</td>
+                <td><span class="stock low">{{ existencia.stock_disponible }} uds</span></td>
+                <td>
+                  {% if existencia.stock_disponible == 0 %}
+                    <span class="badge cancelado">Agotado</span>
+                  {% else %}
+                    <span class="badge pendiente">Bajo stock</span>
+                  {% endif %}
+                </td>
                 <td class="text-mm-muted">{{ existencia.fecha_vencimiento|default:"—" }}</td>
                 <td class="text-right">
                   <a class="button secondary small" href="{% url 'tienda:inventario-editar' existencia.pk %}">Actualizar</a>
@@ -61,7 +79,7 @@
         </table>
       </div>
     {% else %}
-      <p class="empty">No hay existencias bajas que requieran atención.</p>
+      <p class="empty">No hay existencias bajas que requieran atención en tu sucursal.</p>
     {% endif %}
   </section>
 {% endblock %}

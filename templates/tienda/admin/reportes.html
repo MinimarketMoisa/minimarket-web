@@ -5,11 +5,13 @@
 {% block content %}
 <section class="page-heading">
   <div>
-    <p class="eyebrow">INTELIGENCIA DE NEGOCIO</p>
+    <p class="eyebrow">INTELIGENCIA DE NEGOCIO · {{ mes_nombre|upper }}</p>
     <h1>Métricas y Rendimiento</h1>
     <p class="muted text-sm">
       {% if portal == "empleado" %}
         Métricas consolidadas de tu sucursal: <strong class="text-mm-ink">{{ sucursal_actual.nombre }}</strong>
+      {% elif sucursal_seleccionada %}
+        Métricas filtradas por sucursal: <strong class="text-mm-ink">{{ sucursal_seleccionada.nombre }}</strong>
       {% else %}
         Consolidado global de todas las sucursales y canales de venta
       {% endif %}
@@ -31,35 +33,54 @@
         </select>
       </label>
     {% endif %}
+    {% if sucursal_filtro %}
+      <a class="button secondary small" href="?mes_anio={{ mes_seleccionado }}">Todas</a>
+    {% endif %}
   </form>
 </section>
 
 <!-- Tarjetas de Resumen KPI -->
 <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 mb-6">
   <div class="panel mb-0 p-5 border-t-4 border-t-mm-green">
-    <p class="eyebrow text-emerald-700">VENTAS TOTALES (MES)</p>
+    <p class="eyebrow text-emerald-700">VENTAS CONFIRMADAS (MES)</p>
     <h2 class="mt-2 text-3xl font-extrabold text-mm-ink">$ {{ total_ventas|floatformat:2 }}</h2>
-    <p class="mt-1 text-xs text-mm-muted">{{ pedidos_entregados_count }} pedidos entregados</p>
+    <p class="mt-1 text-xs text-mm-muted">
+      {{ pedidos_confirmados_count }} confirmados ({{ pedidos_entregados_count }} entregados)
+      {% if ventas_en_proceso > 0 %}
+        · <span class="font-semibold text-mm-ink">$ {{ ventas_en_proceso|floatformat:2 }}</span> en curso
+      {% endif %}
+    </p>
   </div>
 
   <div class="panel mb-0 p-5 border-t-4 border-t-sky-500">
-    <p class="eyebrow text-sky-600">EFECTIVIDAD DE ENTREGA</p>
+    <p class="eyebrow text-sky-600">EFECTIVIDAD OPERATIVA</p>
     <h2 class="mt-2 text-3xl font-extrabold text-mm-ink">{{ tasa_efectividad }}%</h2>
-    <p class="mt-1 text-xs text-mm-muted">{{ pedidos_cancelados_count }} cancelados de {{ total_pedidos_periodo }} totales</p>
+    <p class="mt-1 text-xs text-mm-muted">
+      {{ pedidos_entregados_count }} entregados · {{ pedidos_en_proceso_count }} activos · {{ pedidos_cancelados_count }} cancelados (de {{ total_pedidos_periodo }})
+    </p>
   </div>
 
   <div class="panel mb-0 p-5 border-t-4 border-t-mm-orange">
     <p class="eyebrow text-mm-orange-dark">TICKET PROMEDIO</p>
     <h2 class="mt-2 text-3xl font-extrabold text-mm-ink">$ {{ ticket_promedio|floatformat:2 }}</h2>
-    <p class="mt-1 text-xs text-mm-muted">Por orden completada</p>
+    <p class="mt-1 text-xs text-mm-muted">Promedio por pedido válido ({{ pedidos_validos_count }} órdenes)</p>
   </div>
 
   <div class="panel mb-0 p-5 border-t-4 border-t-violet-500">
-    <p class="eyebrow text-violet-600">MÉTODOS DE PAGO</p>
-    <div class="mt-2 flex flex-col gap-1 text-sm text-mm-ink">
-      <div class="flex justify-between"><span>Wompi / Tarjeta:</span><strong>$ {{ ventas_wompi|floatformat:2 }}</strong></div>
-      <div class="flex justify-between"><span>Transferencia:</span><strong>$ {{ ventas_transferencia|floatformat:2 }}</strong></div>
-      <div class="flex justify-between"><span>Contra entrega:</span><strong>$ {{ ventas_efectivo|floatformat:2 }}</strong></div>
+    <p class="eyebrow text-violet-600">MÉTODOS DE PAGO (WOMPI / OTROS)</p>
+    <div class="mt-2 flex flex-col gap-1.5 text-sm text-mm-ink">
+      <div class="flex justify-between items-center">
+        <span>Wompi / Tarjeta <small class="text-xs text-mm-muted">({{ wompi_count }})</small>:</span>
+        <strong>$ {{ ventas_wompi|floatformat:2 }}</strong>
+      </div>
+      <div class="flex justify-between items-center">
+        <span>Transferencia <small class="text-xs text-mm-muted">({{ transferencia_count }})</small>:</span>
+        <strong>$ {{ ventas_transferencia|floatformat:2 }}</strong>
+      </div>
+      <div class="flex justify-between items-center">
+        <span>Contra entrega <small class="text-xs text-mm-muted">({{ efectivo_count }})</small>:</span>
+        <strong>$ {{ ventas_efectivo|floatformat:2 }}</strong>
+      </div>
     </div>
   </div>
 </section>
@@ -72,6 +93,7 @@
         <p class="eyebrow">EVOLUCIÓN TEMPORAL</p>
         <h2>Ventas Diarias del Mes ({{ mes_nombre }})</h2>
       </div>
+      <span class="badge">{{ pedidos_validos_count }} pedido{{ pedidos_validos_count|pluralize:"s" }} válido{{ pedidos_validos_count|pluralize:"s" }}</span>
     </div>
     <div class="relative h-[300px]">
       <canvas id="chartVentasDiarias"></canvas>
@@ -81,12 +103,16 @@
   <section class="panel mb-0">
     <div class="section-heading">
       <div>
-        <p class="eyebrow">DISTRIBUCIÓN</p>
-        <h2>Pagos Confirmados</h2>
+        <p class="eyebrow">DISTRIBUCIÓN POR PASARELA</p>
+        <h2>Wompi, Transferencia y Efectivo</h2>
       </div>
     </div>
-    <div class="relative h-[300px]">
-      <canvas id="chartMetodosPago"></canvas>
+    <div class="relative h-[300px] flex items-center justify-center">
+      {% if tiene_datos_metodos %}
+        <canvas id="chartMetodosPago"></canvas>
+      {% else %}
+        <p class="muted text-sm text-center px-4">No se registran pagos o pedidos activos en {{ mes_nombre }}.</p>
+      {% endif %}
     </div>
   </section>
 </div>
@@ -97,7 +123,7 @@
     <div class="section-heading">
       <div>
         <p class="eyebrow">TOP ARTÍCULOS</p>
-        <h2>Productos Más Vendidos</h2>
+        <h2>Productos Más Demandados</h2>
       </div>
     </div>
     <div class="table-wrap">
@@ -130,7 +156,7 @@
     <div class="section-heading">
       <div>
         <p class="eyebrow">DESPACHO Y REPARTO</p>
-        <h2>Rendimiento de Entrega</h2>
+        <h2>Rendimiento de Repartidores</h2>
       </div>
     </div>
     <div class="table-wrap">
@@ -138,7 +164,7 @@
         <thead>
           <tr>
             <th>Repartidor</th>
-            <th>Entregas</th>
+            <th>Pedidos Asignados / Entregados</th>
             <th>Estado Actual</th>
           </tr>
         </thead>
@@ -155,7 +181,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="3" class="muted py-6 text-center">No se registran repartidores activos en el período.</td>
+              <td colspan="3" class="muted py-6 text-center">No se registran entregas con repartidor en el período.</td>
             </tr>
           {% endfor %}
         </tbody>
@@ -192,28 +218,40 @@
       scales: {
         y: {
           beginAtZero: true,
-          ticks: { callback: function(value) { return '$ ' + value; } }
+          ticks: { callback: function(value) { return '$ ' + Number(value).toFixed(2); } }
         }
       }
     }
   });
 
-  new Chart(document.getElementById('chartMetodosPago').getContext('2d'), {
-    type: 'doughnut',
-    data: {
-      labels: ['Wompi / Tarjeta', 'Transferencia', 'Contra Entrega'],
-      datasets: [{
-        data: [{{ ventas_wompi|default:0 }}, {{ ventas_transferencia|default:0 }}, {{ ventas_efectivo|default:0 }}],
-        backgroundColor: ['#0ea5e9', '#9caa17', '#f67300'],
-        borderWidth: 2,
-        borderColor: '#ffffff'
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom' } }
-    }
-  });
+  const canvasMetodos = document.getElementById('chartMetodosPago');
+  if (canvasMetodos) {
+    new Chart(canvasMetodos.getContext('2d'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Wompi / Tarjeta', 'Transferencia', 'Contra Entrega'],
+        datasets: [{
+          data: [{{ ventas_wompi|stringformat:".2f" }}, {{ ventas_transferencia|stringformat:".2f" }}, {{ ventas_efectivo|stringformat:".2f" }}],
+          backgroundColor: ['#0ea5e9', '#9caa17', '#f67300'],
+          borderWidth: 2,
+          borderColor: '#ffffff'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                return ' ' + ctx.label + ': $ ' + Number(ctx.parsed || 0).toFixed(2);
+              }
+            }
+          }
+        }
+      }
+    });
+  }
 </script>
 {% endblock %}

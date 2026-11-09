@@ -3,6 +3,7 @@ from decimal import Decimal
 from functools import wraps
 import json
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
@@ -12,8 +13,10 @@ from django.db.models import (
     Count,
     DateField,
     DecimalField,
+    Exists,
     IntegerField,
     OuterRef,
+    Prefetch,
     Q,
     Subquery,
     Sum,
@@ -24,7 +27,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.html import format_html
+from django.utils.html import format_html, format_html_join
 from django.views.decorators.http import require_http_methods, require_POST
 
 from .forms import (
@@ -51,12 +54,15 @@ from .models import (
 )
 from .services import (
     ESTADOS_GESTIONABLES,
+    ESTADOS_VISIBLES_SUCURSAL,
+    UMBRAL_BAJO_STOCK,
     actualizar_repartidor_pedido,
     cancelar_pedido,
     direccion_pedido,
     es_admin,
     es_empleado,
     es_personal,
+    generar_jwt_seguimiento,
     liberar_repartidor_si_sin_pedidos,
     obtener_sucursal_empleado,
     parsear_resolucion_soporte,
@@ -76,6 +82,12 @@ MESES_ES = (
     "Octubre",
     "Noviembre",
     "Diciembre",
+)
+
+METODOS_PAGO_FILTRO_CHOICES = (
+    ("WOMPI", "Wompi / Tarjeta"),
+    ("TRANSFERENCIA", "Transferencia"),
+    ("CONTRA_ENTREGA", "Contra entrega"),
 )
 
 
@@ -110,6 +122,108 @@ def admin_required(view_func):
 def _badge(texto: str, variante: str = ""):
     clase = f"badge {variante}".strip()
     return format_html('<span class="{}">{}</span>', clase, texto)
+
+
+def _badge_stock(stock: int):
+    if stock <= 0:
+        return format_html(
+            '<div class="flex items-center gap-1.5"><span class="stock low">0 uds</span>'
+            '<span class="badge cancelado">Agotado</span></div>'
+        )
+    if stock <= UMBRAL_BAJO_STOCK:
+        return format_html(
+            '<div class="flex items-center gap-1.5"><span class="stock low">{} uds</span>'
+            '<span class="badge pendiente">Bajo stock</span></div>',
+            stock,
+        )
+    return format_html(
+        '<div class="flex items-center gap-1.5"><span class="stock">{} uds</span>'
+        '<span class="badge aprobado">Disponible</span></div>',
+        stock,
+    )
+
+
+def _resumen_ubicaciones_html(producto: Producto, sucursal_id_filtro: int | None = None):
+    inventarios = list(getattr(producto, "inventarios_prefetched", None) or producto.inventarios.all())
+    if sucursal_id_filtro is not None:
+        inventarios = [inv for inv in inventarios if inv.id_sucursal_id == sucursal_id_filtro]
+    if not inventarios:
+        return format_html('<span class="text-xs text-mm-muted">Sin stock asignado en sucursales</span>')
+
+    pills = []
+    for inv in inventarios:
+        stock = int(inv.stock_disponible or 0)
+        if stock == 0:
+            clases = "border-red-200 bg-red-50 text-red-800"
+            etiqueta = f"{inv.id_sucursal.nombre}: 0 (Agotado)"
+        elif stock <= UMBRAL_BAJO_STOCK:
+            clases = "border-amber-200 bg-amber-50 text-amber-900"
+            etiqueta = f"{inv.id_sucursal.nombre}: {stock} (Bajo)"
+        else:
+            clases = "border-emerald-200 bg-emerald-50 text-emerald-900"
+            etiqueta = f"{inv.id_sucursal.nombre}: {stock}"
+        pills.append((clases, etiqueta))
+
+    return format_html(
+        '<div class="flex flex-wrap gap-1">{}</div>',
+        format_html_join(
+            "",
+            '<span class="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold {}">{}</span>',
+            pills,
+        ),
+    )
+
+
+def _contexto_seguimiento_pedido(request: HttpRequest, pedido: Pedido, direccion) -> dict:
+    sucursal = pedido.id_sucursal
+    perfil_rep = pedido.id_repartidor
+    usuario_rep = getattr(perfil_rep, "id_repartidor", None) if perfil_rep else None
+
+    estado_inicial = {
+        "id_pedido": pedido.id_pedido,
+        "codigo_pedido": pedido.codigo_pedido,
+        "estado": pedido.estado,
+        "tipo_entrega": pedido.tipo_entrega,
+        "sucursal": {
+            "id_sucursal": sucursal.id_sucursal,
+            "nombre": sucursal.nombre,
+            "direccion": sucursal.direccion,
+            "latitud": float(sucursal.latitud) if sucursal.latitud is not None else 13.4834,
+            "longitud": float(sucursal.longitud) if sucursal.longitud is not None else -88.1833,
+        }
+        if sucursal
+        else None,
+        "direccion_entrega": {
+            "id_direccion": direccion.id_direccion,
+            "detalle_direccion": direccion.detalle_direccion,
+            "punto_referencia": direccion.punto_referencia,
+            "latitud": float(direccion.latitud) if direccion.latitud is not None else None,
+            "longitud": float(direccion.longitud) if direccion.longitud is not None else None,
+        }
+        if direccion
+        else None,
+        "repartidor": {
+            "id_repartidor": perfil_rep.id_repartidor_id,
+            "nombre_completo": usuario_rep.nombre_completo if usuario_rep else "Repartidor",
+            "telefono": usuario_rep.telefono if usuario_rep else None,
+            "estado_operativo": perfil_rep.estado_operativo,
+            "latitud": float(perfil_rep.ultima_latitud)
+            if perfil_rep.ultima_latitud is not None
+            else (float(sucursal.latitud) if sucursal and sucursal.latitud is not None else None),
+            "longitud": float(perfil_rep.ultima_longitud)
+            if perfil_rep.ultima_longitud is not None
+            else (float(sucursal.longitud) if sucursal and sucursal.longitud is not None else None),
+        }
+        if perfil_rep
+        else None,
+    }
+
+    return {
+        "fastapi_base_url": getattr(settings, "FASTAPI_BASE_URL", "https://minimarket-api.duckdns.org"),
+        "fastapi_ws_url": getattr(settings, "FASTAPI_WS_URL", "wss://minimarket-api.duckdns.org"),
+        "jwt_seguimiento": generar_jwt_seguimiento(request.user),
+        "seguimiento_inicial_json": json.dumps(estado_inicial),
+    }
 
 
 def _productos_con_inventario(sucursal):
@@ -154,6 +268,17 @@ def _portal_list(
     row_builder=None,
     create_url=None,
     per_page: int = PAGE_SIZE,
+    sucursales=None,
+    sucursal_filtro: str = "",
+    categorias=None,
+    categoria_filtro: str = "",
+    estados_opciones=None,
+    estado_filtro: str = "",
+    metodos_pago_opciones=None,
+    metodo_pago_filtro: str = "",
+    mostrar_filtro_stock: bool = False,
+    stock_filtro: str = "",
+    extra_links=None,
 ):
     if queryset is not None and row_builder is not None:
         page_obj = Paginator(queryset, per_page).get_page(request.GET.get("page"))
@@ -178,6 +303,18 @@ def _portal_list(
             "query_base": params.urlencode(),
             "create_url": create_url,
             "busqueda": request.GET.get("q", "").strip(),
+            "sucursales": sucursales,
+            "sucursal_filtro": sucursal_filtro,
+            "categorias": categorias,
+            "categoria_filtro": categoria_filtro,
+            "estados_opciones": estados_opciones,
+            "estado_filtro": estado_filtro,
+            "metodos_pago_opciones": metodos_pago_opciones,
+            "metodo_pago_filtro": metodo_pago_filtro,
+            "mostrar_filtro_stock": mostrar_filtro_stock,
+            "stock_filtro": stock_filtro,
+            "umbral_bajo_stock": UMBRAL_BAJO_STOCK,
+            "extra_links": extra_links,
             "base_template": (
                 "tienda/admin/base.html"
                 if es_admin(request.user)
@@ -277,41 +414,94 @@ def empleado_logout(request: HttpRequest) -> HttpResponse:
 @admin_required
 def admin_panel(request: HttpRequest) -> HttpResponse:
     hoy = timezone.localdate()
-    resumen = Pedido.objects.aggregate(
+    id_sucursal = request.GET.get("id_sucursal", "").strip()
+    sucursales_todas = list(Sucursal.objects.order_by("nombre"))
+    sucursal_seleccionada = None
+
+    pedidos_qs = Pedido.objects.all()
+    inventario_qs = Inventario.objects.filter(id_producto__activo=True)
+    if id_sucursal.isdecimal():
+        suc_id = int(id_sucursal)
+        pedidos_qs = pedidos_qs.filter(id_sucursal_id=suc_id)
+        inventario_qs = inventario_qs.filter(id_sucursal_id=suc_id)
+        sucursal_seleccionada = next((s for s in sucursales_todas if s.pk == suc_id), None)
+
+    venta_confirmada_q = ~Q(estado="CANCELADO") & (Q(estado="ENTREGADO") | Q(estado_pago="PAGADO"))
+    resumen = pedidos_qs.aggregate(
         total_pedidos=Count("id_pedido"),
         pedidos_hoy=Count("id_pedido", filter=Q(fecha_creacion__date=hoy)),
         pendientes=Count("id_pedido", filter=Q(estado="PENDIENTE")),
         preparados=Count("id_pedido", filter=Q(estado="PREPARADO")),
         en_ruta=Count("id_pedido", filter=Q(estado="EN_RUTA")),
-        pagos_pendientes=Count("id_pedido", filter=Q(estado_pago="PENDIENTE")),
+        pagos_pendientes=Count(
+            "id_pedido",
+            filter=Q(estado_pago="PENDIENTE") & ~Q(estado="CANCELADO"),
+        ),
         ventas_entregadas=Coalesce(
-            Sum("total", filter=Q(estado="ENTREGADO")),
+            Sum("total", filter=venta_confirmada_q),
             Decimal("0.00"),
             output_field=DecimalField(),
         ),
     )
+
+    bajo_stock_qs = (
+        inventario_qs.filter(stock_disponible__lte=UMBRAL_BAJO_STOCK)
+        .select_related("id_producto__id_categoria", "id_sucursal")
+        .order_by("stock_disponible", "id_producto__nombre", "id_sucursal__nombre")
+    )
+    inventario_bajo_count = bajo_stock_qs.count()
+    inventario_agotado_count = inventario_qs.filter(stock_disponible=0).count()
+
+    bajo_stock_subq = (
+        Inventario.objects.filter(
+            id_sucursal=OuterRef("pk"),
+            id_producto__activo=True,
+            stock_disponible__lte=UMBRAL_BAJO_STOCK,
+        )
+        .values("id_sucursal")
+        .annotate(cnt=Count("id_inventario"))
+        .values("cnt")[:1]
+    )
+
+    sucursales_tabla_qs = Sucursal.objects.select_related("id_municipio")
+    if sucursal_seleccionada:
+        sucursales_tabla_qs = sucursales_tabla_qs.filter(pk=sucursal_seleccionada.pk)
+
     sucursales = list(
-        Sucursal.objects.select_related("id_municipio")
-        .annotate(
+        sucursales_tabla_qs.annotate(
             total_pedidos=Count("pedidos"),
             pedidos_pendientes=Count("pedidos", filter=Q(pedidos__estado="PENDIENTE")),
             pedidos_preparados=Count("pedidos", filter=Q(pedidos__estado="PREPARADO")),
             pedidos_en_ruta=Count("pedidos", filter=Q(pedidos__estado="EN_RUTA")),
             ventas_entregadas=Coalesce(
-                Sum("pedidos__total", filter=Q(pedidos__estado="ENTREGADO")),
+                Sum(
+                    "pedidos__total",
+                    filter=~Q(pedidos__estado="CANCELADO")
+                    & (Q(pedidos__estado="ENTREGADO") | Q(pedidos__estado_pago="PAGADO")),
+                ),
                 Decimal("0.00"),
                 output_field=DecimalField(),
             ),
-        )
-        .order_by("nombre")
+            bajo_stock_count=Coalesce(
+                Subquery(bajo_stock_subq, output_field=IntegerField()),
+                Value(0),
+            ),
+        ).order_by("nombre")
     )
+
     return render(
         request,
         "tienda/admin/dashboard.html",
         {
             **resumen,
             "sucursales": sucursales,
-            "inventario_bajo": Inventario.objects.filter(stock_disponible__lte=5).count(),
+            "sucursales_todas": sucursales_todas,
+            "sucursal_filtro": id_sucursal,
+            "sucursal_seleccionada": sucursal_seleccionada,
+            "inventario_bajo": inventario_bajo_count,
+            "inventario_agotado": inventario_agotado_count,
+            "productos_bajo_stock": list(bajo_stock_qs[:15]),
+            "umbral_bajo_stock": UMBRAL_BAJO_STOCK,
             "repartidores_libres": PerfilRepartidor.objects.filter(
                 estado_operativo="LIBRE",
                 id_repartidor__activo=True,
@@ -324,10 +514,21 @@ def admin_panel(request: HttpRequest) -> HttpResponse:
 @admin_required
 def pedidos_admin(request: HttpRequest) -> HttpResponse:
     consulta = Pedido.objects.select_related("id_cliente", "id_sucursal")
-    estado = request.GET.get("estado", "")
+    id_sucursal = request.GET.get("id_sucursal", "").strip()
+    if id_sucursal.isdecimal():
+        consulta = consulta.filter(id_sucursal_id=int(id_sucursal))
+
+    estado = request.GET.get("estado", "").strip()
     estados_validos = {choice[0] for choice in Pedido.ESTADO_CHOICES}
     if estado in estados_validos:
         consulta = consulta.filter(estado=estado)
+
+    metodo_pago = request.GET.get("metodo_pago", "").strip()
+    if metodo_pago == "WOMPI":
+        consulta = consulta.filter(metodo_pago__in=["WOMPI", "TARJETA"])
+    elif metodo_pago in {"TRANSFERENCIA", "CONTRA_ENTREGA"}:
+        consulta = consulta.filter(metodo_pago=metodo_pago)
+
     busqueda = request.GET.get("q", "").strip()
     if busqueda:
         filtros = (
@@ -341,20 +542,34 @@ def pedidos_admin(request: HttpRequest) -> HttpResponse:
     return _portal_list(
         request,
         title="Pedidos",
-        description="Historial completo. Busca por código de pedido (ej. PED-000002) o nombre del cliente.",
-        columns=("Código de Pedido", "Cliente", "Sucursal", "Estado", "Total", "Creado"),
+        description="Historial completo. Filtra por sucursal, estado, método de pago (Wompi / Tarjeta) o código de pedido.",
+        columns=("Código de Pedido", "Cliente", "Sucursal", "Método / Pago", "Estado", "Total", "Creado"),
         queryset=consulta.order_by("-fecha_creacion", "-id_pedido"),
+        sucursales=Sucursal.objects.order_by("nombre"),
+        sucursal_filtro=id_sucursal,
+        estados_opciones=Pedido.ESTADO_CHOICES,
+        estado_filtro=estado,
+        metodos_pago_opciones=METODOS_PAGO_FILTRO_CHOICES,
+        metodo_pago_filtro=metodo_pago,
         row_builder=lambda pedido: {
             "cells": (
                 pedido.codigo_pedido or f"#{pedido.id_pedido}",
                 pedido.id_cliente.nombre_completo,
                 pedido.id_sucursal.nombre,
+                format_html(
+                    '<div class="flex flex-wrap items-center gap-1.5">'
+                    '<span class="text-xs font-medium text-mm-ink">{}</span>'
+                    '<span class="badge {}">{}</span></div>',
+                    pedido.get_metodo_pago_display(),
+                    "aprobado" if pedido.estado_pago == "PAGADO" else "pendiente",
+                    pedido.get_estado_pago_display(),
+                ),
                 _badge(pedido.get_estado_display(), pedido.estado.lower()),
                 f"$ {pedido.total:.2f}",
                 pedido.fecha_creacion,
             ),
             "url": reverse("tienda:admin-pedido-detalle", args=[pedido.pk]),
-            "label": "Ver / editar",
+            "label": "Ver / seguir GPS" if pedido.tipo_entrega == "DOMICILIO" else "Ver / editar",
         },
     )
 
@@ -402,6 +617,7 @@ def pedido_admin_detalle(request: HttpRequest, id_pedido: int) -> HttpResponse:
         messages.success(request, f"El pedido {codigo_ref} fue actualizado.")
         return redirect("tienda:admin-pedido-detalle", id_pedido=pedido.pk)
 
+    direccion = direccion_pedido(pedido)
     return render(
         request,
         "tienda/admin/pedido_detalle.html",
@@ -409,7 +625,8 @@ def pedido_admin_detalle(request: HttpRequest, id_pedido: int) -> HttpResponse:
             "pedido": pedido,
             "form": form,
             "detalles": list(pedido.detalles.all()),
-            "direccion": direccion_pedido(pedido),
+            "direccion": direccion,
+            **_contexto_seguimiento_pedido(request, pedido, direccion),
         },
     )
 
@@ -468,20 +685,79 @@ def sucursal_admin_estado(request: HttpRequest, id_sucursal: int) -> HttpRespons
 
 @admin_required
 def productos_admin(request: HttpRequest) -> HttpResponse:
-    productos = _filtro_texto(
-        Producto.objects.select_related("id_categoria"), request, "nombre", "codigo_barras"
+    id_sucursal = request.GET.get("id_sucursal", "").strip()
+    id_categoria = request.GET.get("id_categoria", "").strip()
+    stock_filtro = request.GET.get("bajo", "").strip()
+    suc_id_int = int(id_sucursal) if id_sucursal.isdecimal() else None
+
+    inv_filter = Q(inventarios__id_sucursal_id=suc_id_int) if suc_id_int else Q()
+    productos = (
+        _filtro_texto(
+            Producto.objects.select_related("id_categoria").prefetch_related(
+                Prefetch(
+                    "inventarios",
+                    queryset=Inventario.objects.select_related("id_sucursal").order_by("id_sucursal__nombre"),
+                    to_attr="inventarios_prefetched",
+                )
+            ),
+            request,
+            "nombre",
+            "codigo_barras",
+        )
+        .annotate(
+            stock_total=Coalesce(
+                Sum("inventarios__stock_disponible", filter=inv_filter),
+                Value(0),
+                output_field=IntegerField(),
+            )
+        )
     )
+
+    if id_categoria.isdecimal():
+        productos = productos.filter(id_categoria_id=int(id_categoria))
+
+    if stock_filtro == "agotado":
+        if suc_id_int:
+            productos = productos.filter(
+                ~Exists(
+                    Inventario.objects.filter(
+                        id_producto=OuterRef("pk"),
+                        id_sucursal_id=suc_id_int,
+                        stock_disponible__gt=0,
+                    )
+                )
+            )
+        else:
+            productos = productos.filter(stock_total=0)
+    elif stock_filtro == "1":
+        bajo_subq = Inventario.objects.filter(
+            id_producto=OuterRef("pk"),
+            stock_disponible__lte=UMBRAL_BAJO_STOCK,
+        )
+        if suc_id_int:
+            bajo_subq = bajo_subq.filter(id_sucursal_id=suc_id_int)
+        productos = productos.filter(Exists(bajo_subq) | Q(stock_total__lte=UMBRAL_BAJO_STOCK))
+
     return _portal_list(
         request,
         title="Productos",
-        description="Administra el catálogo global. Los productos con historial se desactivan.",
-        columns=("Producto", "Categoría", "Precio", "Estado"),
+        description="Catálogo global con stock total y desglose de existencias por sucursal.",
+        columns=("Producto", "Categoría", "Precio", "Stock Total", "Dónde están (Sucursales)", "Estado"),
         queryset=productos.order_by("nombre"),
+        sucursales=Sucursal.objects.order_by("nombre"),
+        sucursal_filtro=id_sucursal,
+        categorias=Categoria.objects.order_by("nombre"),
+        categoria_filtro=id_categoria,
+        mostrar_filtro_stock=True,
+        stock_filtro=stock_filtro,
+        extra_links=[{"url": reverse("tienda:admin-stock-general"), "label": "Vista Stock General"}],
         row_builder=lambda p: {
             "cells": (
                 p.nombre,
                 p.id_categoria.nombre,
                 f"$ {p.precio_base:.2f}",
+                _badge_stock(int(p.stock_total or 0)),
+                _resumen_ubicaciones_html(p, suc_id_int),
                 _badge("Activo", "aprobado") if p.activo else _badge("Inactivo", "cancelado"),
             ),
             "url": reverse("tienda:admin-producto-editar", args=[p.pk]),
@@ -576,26 +852,52 @@ def categoria_admin_eliminar(request: HttpRequest, id_categoria: int) -> HttpRes
 @admin_required
 def inventario_admin(request: HttpRequest) -> HttpResponse:
     inventarios = _filtro_texto(
-        Inventario.objects.select_related("id_sucursal", "id_producto"),
+        Inventario.objects.select_related("id_sucursal", "id_producto__id_categoria"),
         request,
         "id_producto__nombre",
+        "id_producto__codigo_barras",
         "id_sucursal__nombre",
     )
+
+    id_sucursal = request.GET.get("id_sucursal", "").strip()
+    if id_sucursal.isdecimal():
+        inventarios = inventarios.filter(id_sucursal_id=int(id_sucursal))
+
+    id_categoria = request.GET.get("id_categoria", "").strip()
+    if id_categoria.isdecimal():
+        inventarios = inventarios.filter(id_producto__id_categoria_id=int(id_categoria))
+
+    stock_filtro = request.GET.get("bajo", "").strip()
+    if stock_filtro == "agotado":
+        inventarios = inventarios.filter(stock_disponible=0)
+    elif stock_filtro == "1":
+        inventarios = inventarios.filter(stock_disponible__lte=UMBRAL_BAJO_STOCK)
+
+    orden = (
+        ("stock_disponible", "id_producto__nombre", "id_sucursal__nombre")
+        if stock_filtro in {"1", "agotado"}
+        else ("id_sucursal__nombre", "id_producto__nombre")
+    )
+
     return _portal_list(
         request,
-        title="Inventario",
-        description="Administra existencias por sucursal; solo se puede retirar un registro si su stock es cero.",
-        columns=("Sucursal", "Producto", "Existencias", "Vencimiento"),
-        queryset=inventarios.order_by("id_sucursal__nombre", "id_producto__nombre"),
+        title="Inventario por sucursal",
+        description=f"Filtra por sucursal, categoría o productos en bajo stock (≤ {UMBRAL_BAJO_STOCK} unidades).",
+        columns=("Sucursal", "Producto", "Categoría", "Existencias / Estado", "Vencimiento"),
+        queryset=inventarios.order_by(*orden),
+        sucursales=Sucursal.objects.order_by("nombre"),
+        sucursal_filtro=id_sucursal,
+        categorias=Categoria.objects.order_by("nombre"),
+        categoria_filtro=id_categoria,
+        mostrar_filtro_stock=True,
+        stock_filtro=stock_filtro,
+        extra_links=[{"url": reverse("tienda:admin-stock-general"), "label": "Ver stock general por producto"}],
         row_builder=lambda i: {
             "cells": (
                 i.id_sucursal.nombre,
                 i.id_producto.nombre,
-                format_html(
-                    '<span class="stock {}">{}</span>',
-                    "low" if i.stock_disponible <= 5 else "",
-                    i.stock_disponible,
-                ),
+                i.id_producto.id_categoria.nombre,
+                _badge_stock(int(i.stock_disponible or 0)),
                 i.fecha_vencimiento or "—",
             ),
             "url": reverse("tienda:admin-inventario-editar", args=[i.pk]),
@@ -607,6 +909,122 @@ def inventario_admin(request: HttpRequest) -> HttpResponse:
             ),
         },
         create_url=reverse("tienda:admin-inventario-crear"),
+    )
+
+
+@admin_required
+def stock_general_admin(request: HttpRequest) -> HttpResponse:
+    busqueda = request.GET.get("q", "").strip()
+    id_sucursal = request.GET.get("id_sucursal", "").strip()
+    id_categoria = request.GET.get("id_categoria", "").strip()
+    stock_filtro = request.GET.get("bajo", "").strip()
+
+    sucursales = list(Sucursal.objects.filter(activa=True).order_by("nombre"))
+    sucursal_seleccionada = None
+    sucursales_evaluadas = sucursales
+    if id_sucursal.isdecimal():
+        suc_id = int(id_sucursal)
+        sucursal_seleccionada = next((s for s in sucursales if s.pk == suc_id), None)
+        if sucursal_seleccionada:
+            sucursales_evaluadas = [sucursal_seleccionada]
+
+    productos_qs = Producto.objects.filter(activo=True).select_related("id_categoria").prefetch_related(
+        Prefetch(
+            "inventarios",
+            queryset=Inventario.objects.select_related("id_sucursal").order_by("id_sucursal__nombre"),
+            to_attr="inventarios_prefetched",
+        )
+    )
+    if busqueda:
+        productos_qs = productos_qs.filter(
+            Q(nombre__icontains=busqueda) | Q(codigo_barras__icontains=busqueda)
+        )
+    if id_categoria.isdecimal():
+        productos_qs = productos_qs.filter(id_categoria_id=int(id_categoria))
+
+    inv_resumen_qs = Inventario.objects.filter(id_producto__activo=True)
+    if sucursal_seleccionada:
+        inv_resumen_qs = inv_resumen_qs.filter(id_sucursal=sucursal_seleccionada)
+    if id_categoria.isdecimal():
+        inv_resumen_qs = inv_resumen_qs.filter(id_producto__id_categoria_id=int(id_categoria))
+
+    resumen_stock = inv_resumen_qs.aggregate(
+        unidades_totales=Coalesce(Sum("stock_disponible"), Value(0), output_field=IntegerField()),
+        registros_bajo_stock=Count("id_inventario", filter=Q(stock_disponible__lte=UMBRAL_BAJO_STOCK)),
+        registros_agotados=Count("id_inventario", filter=Q(stock_disponible=0)),
+    )
+    resumen_stock["total_productos"] = productos_qs.count()
+
+    filas = []
+    for prod in productos_qs.order_by("nombre"):
+        mapa_inv = {inv.id_sucursal_id: inv for inv in getattr(prod, "inventarios_prefetched", [])}
+        ubicaciones = []
+        stock_total = 0
+        tiene_bajo = False
+        tiene_agotado = False
+
+        for suc in sucursales_evaluadas:
+            inv = mapa_inv.get(suc.pk)
+            stock_suc = int(inv.stock_disponible) if inv is not None else 0
+            stock_total += stock_suc
+            es_bajo = stock_suc <= UMBRAL_BAJO_STOCK
+            if es_bajo:
+                tiene_bajo = True
+            if stock_suc == 0:
+                tiene_agotado = True
+            ubicaciones.append(
+                {
+                    "id_sucursal": suc.pk,
+                    "sucursal": suc.nombre,
+                    "stock": stock_suc,
+                    "es_bajo": es_bajo,
+                    "id_inventario": inv.pk if inv is not None else None,
+                }
+            )
+
+        if stock_filtro == "agotado" and not tiene_agotado:
+            continue
+        if stock_filtro == "1" and not tiene_bajo:
+            continue
+
+        filas.append(
+            {
+                "id_producto": prod.pk,
+                "nombre": prod.nombre,
+                "codigo_barras": prod.codigo_barras,
+                "categoria": prod.id_categoria.nombre,
+                "precio_base": prod.precio_base,
+                "stock_total": stock_total,
+                "tiene_bajo_stock": tiene_bajo,
+                "ubicaciones": ubicaciones,
+            }
+        )
+
+    if stock_filtro in {"1", "agotado"}:
+        filas.sort(key=lambda item: (item["stock_total"], item["nombre"]))
+
+    page_obj = Paginator(filas, PAGE_SIZE).get_page(request.GET.get("page"))
+    params = request.GET.copy()
+    params.pop("page", None)
+
+    return render(
+        request,
+        "tienda/admin/stock_general.html",
+        {
+            "productos": list(page_obj.object_list),
+            "page_obj": page_obj,
+            "query_base": params.urlencode(),
+            "busqueda": busqueda,
+            "sucursales": sucursales,
+            "sucursal_filtro": id_sucursal,
+            "sucursal_seleccionada": sucursal_seleccionada,
+            "categorias": Categoria.objects.order_by("nombre"),
+            "categoria_filtro": id_categoria,
+            "stock_filtro": stock_filtro,
+            "umbral_bajo_stock": UMBRAL_BAJO_STOCK,
+            "resumen_stock": resumen_stock,
+            "base_template": "tienda/admin/base.html",
+        },
     )
 
 
@@ -708,20 +1126,62 @@ def usuario_admin_estado(request: HttpRequest, id_usuario: int) -> HttpResponse:
 
 @empleado_required
 def catalogo_productos_empleado(request: HttpRequest) -> HttpResponse:
-    productos = _filtro_texto(
-        Producto.objects.filter(activo=True).select_related("id_categoria"),
-        request,
-        "nombre",
-        "codigo_barras",
+    id_sucursal = request.GET.get("id_sucursal", "").strip()
+    id_categoria = request.GET.get("id_categoria", "").strip()
+    stock_filtro = request.GET.get("bajo", "").strip()
+    suc_id_int = int(id_sucursal) if id_sucursal.isdecimal() else None
+
+    inv_filter = Q(inventarios__id_sucursal_id=suc_id_int) if suc_id_int else Q()
+    productos = (
+        _filtro_texto(
+            Producto.objects.filter(activo=True)
+            .select_related("id_categoria")
+            .prefetch_related(
+                Prefetch(
+                    "inventarios",
+                    queryset=Inventario.objects.select_related("id_sucursal").order_by("id_sucursal__nombre"),
+                    to_attr="inventarios_prefetched",
+                )
+            ),
+            request,
+            "nombre",
+            "codigo_barras",
+        )
+        .annotate(
+            stock_total=Coalesce(
+                Sum("inventarios__stock_disponible", filter=inv_filter),
+                Value(0),
+                output_field=IntegerField(),
+            )
+        )
     )
+    if id_categoria.isdecimal():
+        productos = productos.filter(id_categoria_id=int(id_categoria))
+    if stock_filtro == "agotado":
+        productos = productos.filter(stock_total=0)
+    elif stock_filtro == "1":
+        productos = productos.filter(stock_total__lte=UMBRAL_BAJO_STOCK)
+
     return _portal_list(
         request,
-        title="Consultar productos",
-        description="Catálogo de consulta; los empleados no modifican precios ni productos globales.",
-        columns=("Producto", "Categoría", "Precio", "Código"),
+        title="Consultar productos y stock general",
+        description="Catálogo de consulta con existencias totales y ubicación por sucursal.",
+        columns=("Producto", "Categoría", "Precio", "Stock Total", "Dónde están (Sucursales)"),
         queryset=productos.order_by("nombre"),
+        sucursales=Sucursal.objects.filter(activa=True).order_by("nombre"),
+        sucursal_filtro=id_sucursal,
+        categorias=Categoria.objects.order_by("nombre"),
+        categoria_filtro=id_categoria,
+        mostrar_filtro_stock=True,
+        stock_filtro=stock_filtro,
         row_builder=lambda p: {
-            "cells": (p.nombre, p.id_categoria.nombre, f"$ {p.precio_base:.2f}", p.codigo_barras or "—")
+            "cells": (
+                p.nombre,
+                p.id_categoria.nombre,
+                f"$ {p.precio_base:.2f}",
+                _badge_stock(int(p.stock_total or 0)),
+                _resumen_ubicaciones_html(p, suc_id_int),
+            )
         },
     )
 
@@ -750,14 +1210,16 @@ def empleado_panel(request: HttpRequest) -> HttpResponse:
     sucursal = request.sucursal_empleado
     conteos = Pedido.objects.filter(
         id_sucursal=sucursal,
-        estado__in=ESTADOS_GESTIONABLES,
+        estado__in=ESTADOS_VISIBLES_SUCURSAL,
     ).aggregate(
         pedidos_pendientes=Count("id_pedido", filter=Q(estado="PENDIENTE")),
         pedidos_preparados=Count("id_pedido", filter=Q(estado="PREPARADO")),
+        pedidos_en_ruta=Count("id_pedido", filter=Q(estado="EN_RUTA")),
     )
     productos_bajos = (
         _productos_con_inventario(sucursal)
-        .filter(stock_disponible__lte=5)
+        .select_related("id_categoria")
+        .filter(stock_disponible__lte=UMBRAL_BAJO_STOCK)
         .order_by("stock_disponible", "nombre")
     )
     return render(
@@ -766,8 +1228,9 @@ def empleado_panel(request: HttpRequest) -> HttpResponse:
         {
             "sucursal": sucursal,
             **conteos,
-            "productos_bajos": list(productos_bajos[:8]),
+            "productos_bajos": list(productos_bajos[:10]),
             "total_productos_bajos": productos_bajos.count(),
+            "umbral_bajo_stock": UMBRAL_BAJO_STOCK,
         },
     )
 
@@ -776,11 +1239,11 @@ def empleado_panel(request: HttpRequest) -> HttpResponse:
 def pedidos_empleado(request: HttpRequest) -> HttpResponse:
     consulta = Pedido.objects.filter(
         id_sucursal=request.sucursal_empleado,
-        estado__in=ESTADOS_GESTIONABLES,
+        estado__in=ESTADOS_VISIBLES_SUCURSAL,
     ).select_related("id_cliente", "id_repartidor__id_repartidor")
 
     estado = request.GET.get("estado", "")
-    if estado in ESTADOS_GESTIONABLES:
+    if estado in ESTADOS_VISIBLES_SUCURSAL:
         consulta = consulta.filter(estado=estado)
     busqueda = request.GET.get("q", "").strip()
     if busqueda:
@@ -809,7 +1272,7 @@ def _pedido_sucursal(request: HttpRequest, id_pedido: int) -> Pedido:
         ).prefetch_related("detalles__id_producto"),
         id_pedido=id_pedido,
         id_sucursal=request.sucursal_empleado,
-        estado__in=ESTADOS_GESTIONABLES,
+        estado__in=ESTADOS_VISIBLES_SUCURSAL,
     )
 
 
@@ -825,13 +1288,15 @@ def detalle_pedido_empleado(request: HttpRequest, id_pedido: int) -> HttpRespons
         .select_related("id_repartidor")
         .order_by("id_repartidor__nombre_completo")
     )
+    direccion = direccion_pedido(pedido)
     return render(
         request,
         "tienda/empleado/pedido_detalle.html",
         {
             "pedido": pedido,
-            "direccion": direccion_pedido(pedido),
+            "direccion": direccion,
             "repartidores": repartidores,
+            **_contexto_seguimiento_pedido(request, pedido, direccion),
         },
     )
 
@@ -898,20 +1363,35 @@ def accion_pedido(request: HttpRequest, id_pedido: int) -> HttpResponse:
 def inventario_empleado(request: HttpRequest) -> HttpResponse:
     consulta = _productos_con_inventario(request.sucursal_empleado).select_related("id_categoria")
     busqueda = request.GET.get("q", "").strip()
-    solo_bajo = request.GET.get("bajo") == "1"
+    id_categoria = request.GET.get("id_categoria", "").strip()
+    stock_filtro = request.GET.get("bajo", "").strip()
 
     if busqueda:
         consulta = consulta.filter(
             Q(nombre__icontains=busqueda) | Q(codigo_barras__icontains=busqueda)
         )
-    if solo_bajo:
-        consulta = consulta.filter(stock_disponible__lte=5)
+    if id_categoria.isdecimal():
+        consulta = consulta.filter(id_categoria_id=int(id_categoria))
+    if stock_filtro == "agotado":
+        consulta = consulta.filter(stock_disponible=0)
+    elif stock_filtro == "1":
+        consulta = consulta.filter(stock_disponible__lte=UMBRAL_BAJO_STOCK)
 
-    pagina = Paginator(consulta.order_by("nombre"), 25).get_page(request.GET.get("page"))
+    orden = ("stock_disponible", "nombre") if stock_filtro in {"1", "agotado"} else ("nombre",)
+    pagina = Paginator(consulta.order_by(*orden), 25).get_page(request.GET.get("page"))
     return render(
         request,
         "tienda/empleado/inventario.html",
-        {"inventario": pagina, "busqueda": busqueda, "solo_bajo": solo_bajo},
+        {
+            "sucursal": request.sucursal_empleado,
+            "inventario": pagina,
+            "busqueda": busqueda,
+            "categorias": Categoria.objects.order_by("nombre"),
+            "categoria_filtro": id_categoria,
+            "stock_filtro": stock_filtro,
+            "solo_bajo": stock_filtro == "1",
+            "umbral_bajo_stock": UMBRAL_BAJO_STOCK,
+        },
     )
 
 
@@ -975,53 +1455,80 @@ def _calcular_metricas_reportes(pedidos_qs, anio: int, mes: int) -> dict:
         fecha_creacion__month=mes,
     )
     entregado_q = Q(estado="ENTREGADO")
+    valido_q = ~Q(estado="CANCELADO")
+    confirmado_q = valido_q & (Q(estado="ENTREGADO") | Q(estado_pago="PAGADO"))
+    en_proceso_q = Q(estado__in=["PENDIENTE", "PREPARADO", "EN_RUTA"])
+    wompi_q = Q(metodo_pago__in=["WOMPI", "TARJETA"])
     cero = Decimal("0.00")
 
-    # Consolidamos 7 consultas individuales en una sola agregación condicional SQL
     agregados = pedidos_periodo.aggregate(
         total_pedidos_periodo=Count("id_pedido"),
         pedidos_entregados_count=Count("id_pedido", filter=entregado_q),
+        pedidos_confirmados_count=Count("id_pedido", filter=confirmado_q),
+        pedidos_validos_count=Count("id_pedido", filter=valido_q),
+        pedidos_en_proceso_count=Count("id_pedido", filter=en_proceso_q),
         pedidos_cancelados_count=Count("id_pedido", filter=Q(estado="CANCELADO")),
-        total_ventas=Coalesce(Sum("total", filter=entregado_q), cero, output_field=DecimalField()),
+        ventas_confirmadas=Coalesce(Sum("total", filter=confirmado_q), cero, output_field=DecimalField()),
+        ventas_validas=Coalesce(Sum("total", filter=valido_q), cero, output_field=DecimalField()),
+        ventas_en_proceso=Coalesce(
+            Sum("total", filter=en_proceso_q & Q(estado_pago="PENDIENTE")),
+            cero,
+            output_field=DecimalField(),
+        ),
         ventas_wompi=Coalesce(
-            Sum("total", filter=entregado_q & Q(metodo_pago__in=["WOMPI", "TARJETA"])),
+            Sum("total", filter=valido_q & wompi_q),
             cero,
             output_field=DecimalField(),
         ),
         ventas_transferencia=Coalesce(
-            Sum("total", filter=entregado_q & Q(metodo_pago="TRANSFERENCIA")),
+            Sum("total", filter=valido_q & Q(metodo_pago="TRANSFERENCIA")),
             cero,
             output_field=DecimalField(),
         ),
         ventas_efectivo=Coalesce(
-            Sum("total", filter=entregado_q & Q(metodo_pago="CONTRA_ENTREGA")),
+            Sum("total", filter=valido_q & Q(metodo_pago="CONTRA_ENTREGA")),
             cero,
             output_field=DecimalField(),
         ),
+        wompi_count=Count("id_pedido", filter=valido_q & wompi_q),
+        transferencia_count=Count("id_pedido", filter=valido_q & Q(metodo_pago="TRANSFERENCIA")),
+        efectivo_count=Count("id_pedido", filter=valido_q & Q(metodo_pago="CONTRA_ENTREGA")),
     )
 
-    total_pedidos = agregados["total_pedidos_periodo"]
-    entregados_count = agregados["pedidos_entregados_count"]
-    total_ventas = agregados["total_ventas"] or cero
+    total_pedidos = agregados["total_pedidos_periodo"] or 0
+    entregados_count = agregados["pedidos_entregados_count"] or 0
+    confirmados_count = agregados["pedidos_confirmados_count"] or 0
+    validos_count = agregados["pedidos_validos_count"] or 0
+    cancelados_count = agregados["pedidos_cancelados_count"] or 0
 
-    tasa_efectividad = (
-        round((entregados_count / total_pedidos) * 100, 1) if total_pedidos > 0 else 100.0
-    )
+    ventas_confirmadas = agregados["ventas_confirmadas"] or cero
+    ventas_validas = agregados["ventas_validas"] or cero
+    total_ventas = ventas_confirmadas if ventas_confirmadas > cero else ventas_validas
+
+    # Efectividad: pedidos no cancelados que fueron entregados o pagados exitosamente sobre el total
+    if total_pedidos > 0:
+        exitosos = max(entregados_count, confirmados_count, validos_count - cancelados_count if entregados_count == 0 else entregados_count)
+        tasa_efectividad = round(((total_pedidos - cancelados_count) / total_pedidos) * 100, 1)
+    else:
+        tasa_efectividad = 0.0
+
     ticket_promedio = (
-        round(float(total_ventas) / entregados_count, 2) if entregados_count > 0 else 0.0
+        round(float(ventas_validas) / validos_count, 2) if validos_count > 0 else 0.0
     )
 
-    entregados_qs = pedidos_periodo.filter(estado="ENTREGADO")
+    pedidos_grafica_qs = pedidos_periodo.exclude(estado="CANCELADO")
     num_dias = calendar.monthrange(anio, mes)[1]
     dias_dict = {d: 0.0 for d in range(1, num_dias + 1)}
 
     ventas_por_dia = (
-        entregados_qs.annotate(dia=TruncDate("fecha_creacion"))
+        pedidos_grafica_qs.annotate(
+            dia=TruncDate("fecha_creacion", tzinfo=timezone.get_current_timezone())
+        )
         .values("dia")
         .annotate(total_dia=Sum("total"))
     )
     for row in ventas_por_dia:
-        if row["dia"]:
+        if row["dia"] and row["dia"].month == mes:
             dias_dict[row["dia"].day] = float(row["total_dia"] or 0)
 
     top_productos = [
@@ -1031,10 +1538,10 @@ def _calcular_metricas_reportes(pedidos_qs, anio: int, mes: int) -> dict:
             "total_recaudado": float(p["total_recaudado"] or 0),
         }
         for p in (
-            DetallePedido.objects.filter(id_pedido__in=entregados_qs)
+            DetallePedido.objects.filter(id_pedido__in=pedidos_grafica_qs)
             .values("id_producto__nombre")
             .annotate(unidades=Sum("cantidad"), total_recaudado=Sum("subtotal"))
-            .order_by("-unidades")[:8]
+            .order_by("-unidades", "-total_recaudado")[:8]
         )
     ]
 
@@ -1045,7 +1552,7 @@ def _calcular_metricas_reportes(pedidos_qs, anio: int, mes: int) -> dict:
             "entregas": r["entregas"],
         }
         for r in (
-            entregados_qs.filter(id_repartidor__isnull=False)
+            pedidos_grafica_qs.filter(id_repartidor__isnull=False)
             .values(
                 "id_repartidor__id_repartidor__nombre_completo",
                 "id_repartidor__estado_operativo",
@@ -1055,16 +1562,28 @@ def _calcular_metricas_reportes(pedidos_qs, anio: int, mes: int) -> dict:
         )
     ]
 
+    v_wompi = float(agregados["ventas_wompi"] or 0)
+    v_transf = float(agregados["ventas_transferencia"] or 0)
+    v_efectivo = float(agregados["ventas_efectivo"] or 0)
+
     return {
         "total_ventas": total_ventas,
+        "ventas_en_proceso": float(agregados["ventas_en_proceso"] or 0),
         "pedidos_entregados_count": entregados_count,
-        "pedidos_cancelados_count": agregados["pedidos_cancelados_count"],
+        "pedidos_confirmados_count": confirmados_count,
+        "pedidos_validos_count": validos_count,
+        "pedidos_en_proceso_count": agregados["pedidos_en_proceso_count"] or 0,
+        "pedidos_cancelados_count": cancelados_count,
         "total_pedidos_periodo": total_pedidos,
         "tasa_efectividad": tasa_efectividad,
         "ticket_promedio": ticket_promedio,
-        "ventas_wompi": float(agregados["ventas_wompi"]),
-        "ventas_transferencia": float(agregados["ventas_transferencia"]),
-        "ventas_efectivo": float(agregados["ventas_efectivo"]),
+        "ventas_wompi": v_wompi,
+        "ventas_transferencia": v_transf,
+        "ventas_efectivo": v_efectivo,
+        "wompi_count": agregados["wompi_count"] or 0,
+        "transferencia_count": agregados["transferencia_count"] or 0,
+        "efectivo_count": agregados["efectivo_count"] or 0,
+        "tiene_datos_metodos": (v_wompi + v_transf + v_efectivo) > 0,
         "chart_dias_labels": json.dumps([f"Día {d}" for d in range(1, num_dias + 1)]),
         "chart_dias_valores": json.dumps([dias_dict[d] for d in range(1, num_dias + 1)]),
         "top_productos": top_productos,
@@ -1079,8 +1598,12 @@ def reportes_admin(request: HttpRequest) -> HttpResponse:
     anio, mes = _parse_mes_anio(request)
     pedidos_qs = Pedido.objects.all()
     id_sucursal = request.GET.get("id_sucursal", "").strip()
+    sucursales = list(Sucursal.objects.filter(activa=True).order_by("nombre"))
+    sucursal_seleccionada = None
     if id_sucursal.isdecimal():
-        pedidos_qs = pedidos_qs.filter(id_sucursal_id=int(id_sucursal))
+        suc_id = int(id_sucursal)
+        pedidos_qs = pedidos_qs.filter(id_sucursal_id=suc_id)
+        sucursal_seleccionada = next((s for s in sucursales if s.pk == suc_id), None)
 
     metricas = _calcular_metricas_reportes(pedidos_qs, anio, mes)
     return render(
@@ -1090,8 +1613,9 @@ def reportes_admin(request: HttpRequest) -> HttpResponse:
             **metricas,
             "portal": "admin",
             "base_template": "tienda/admin/base.html",
-            "sucursales": Sucursal.objects.filter(activa=True).order_by("nombre"),
+            "sucursales": sucursales,
             "sucursal_filtro": id_sucursal,
+            "sucursal_seleccionada": sucursal_seleccionada,
         },
     )
 
@@ -1117,14 +1641,19 @@ def reportes_empleado(request: HttpRequest) -> HttpResponse:
 
 @admin_required
 def denuncias_admin(request: HttpRequest) -> HttpResponse:
-    resumen = Denuncia.objects.aggregate(
+    id_sucursal = request.GET.get("id_sucursal", "").strip()
+    base_qs = Denuncia.objects.all()
+    if id_sucursal.isdecimal():
+        base_qs = base_qs.filter(id_pedido__id_sucursal_id=int(id_sucursal))
+
+    resumen = base_qs.aggregate(
         total_reportes=Count("id_denuncia"),
         pendientes_count=Count("id_denuncia", filter=Q(estado="PENDIENTE")),
         investigando_count=Count("id_denuncia", filter=Q(estado="INVESTIGANDO")),
         resueltos_count=Count("id_denuncia", filter=Q(estado="RESUELTO")),
     )
 
-    queryset = Denuncia.objects.select_related(
+    queryset = base_qs.select_related(
         "id_pedido", "id_cliente", "id_repartidor"
     ).order_by("-fecha_creacion")
 
@@ -1158,6 +1687,8 @@ def denuncias_admin(request: HttpRequest) -> HttpResponse:
         {
             "items": page_obj,
             "estado_filtro": estado,
+            "sucursal_filtro": id_sucursal,
+            "sucursales": Sucursal.objects.order_by("nombre"),
             "busqueda": busqueda,
             "page_obj": page_obj,
             **resumen,

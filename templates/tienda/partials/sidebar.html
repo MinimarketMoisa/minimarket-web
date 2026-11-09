@@ -25,6 +25,9 @@
     <a class="sidebar-link {% if current == 'admin-inventario' or current == 'admin-inventario-crear' or current == 'admin-inventario-editar' %}active{% endif %}" href="{% url 'tienda:admin-inventario' %}">
       <span class="sidebar-icon">▦</span> Inventario global
     </a>
+    <a class="sidebar-link {% if current == 'admin-stock-general' %}active{% endif %}" href="{% url 'tienda:admin-stock-general' %}">
+      <span class="sidebar-icon">⊞</span> Stock general
+    </a>
     <a class="sidebar-link {% if current == 'admin-sucursales' or current == 'admin-sucursal-crear' or current == 'admin-sucursal-editar' %}active{% endif %}" href="{% url 'tienda:admin-sucursales' %}">
       <span class="sidebar-icon">⌂</span> Sucursales
     </a>

@@ -1,5 +1,12 @@
 {% extends "tienda/admin/base.html" %}
+{% load static %}
 {% block title %}{% if pedido.codigo_pedido %}{{ pedido.codigo_pedido }}{% else %}Pedido #{{ pedido.id_pedido }}{% endif %}{% endblock %}
+{% block extra_head %}
+  {% if pedido.tipo_entrega == "DOMICILIO" %}
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  {% endif %}
+{% endblock %}
 {% block content %}
   <div class="breadcrumbs">
     <a href="{% url 'tienda:admin-pedidos' %}">Pedidos</a>
@@ -13,7 +20,7 @@
       <h1>{% if pedido.codigo_pedido %}{{ pedido.codigo_pedido }}{% else %}Pedido #{{ pedido.id_pedido }}{% endif %}</h1>
       <p class="muted text-sm">Creado el {{ pedido.fecha_creacion|date:"d/m/Y H:i" }}</p>
     </div>
-    <span class="badge {{ pedido.estado|lower }} text-sm px-3.5 py-1.5">{{ pedido.get_estado_display }}</span>
+    <span id="mm-pedido-estado-badge" class="badge {{ pedido.estado|lower }} text-sm px-3.5 py-1.5">{{ pedido.get_estado_display }}</span>
   </section>
 
   <div class="detail-grid">
@@ -77,15 +84,80 @@
       {% endif %}
 
       <hr>
-      <p class="eyebrow">PAGO</p>
+      <p class="eyebrow">PAGO Y PASARELA</p>
       <div class="flex flex-wrap items-center gap-2">
-        <span class="font-medium">{{ pedido.get_metodo_pago_display }}</span>
-        <span class="badge {% if pedido.estado_pago == 'PAGADO' %}aprobado{% else %}pendiente{% endif %}">
+        <span id="mm-pedido-metodo-texto" class="font-medium">{{ pedido.get_metodo_pago_display }}</span>
+        <span id="mm-pedido-pago-badge" class="badge {% if pedido.estado_pago == 'PAGADO' %}aprobado{% else %}pendiente{% endif %}">
           {{ pedido.get_estado_pago_display }}
         </span>
       </div>
+      {% if pedido.metodo_pago == "TARJETA" or pedido.metodo_pago == "WOMPI" %}
+        <p class="text-xs text-sky-700 font-medium pt-1">Pasarela de tarjeta Wompi Sandbox</p>
+      {% endif %}
+      {% if pedido.total > 50 %}
+        <p class="text-xs text-mm-muted pt-0.5">Pedido mayor a $50.00 (requiere pago con tarjeta / Wompi).</p>
+      {% endif %}
     </aside>
   </div>
+
+  {% if pedido.tipo_entrega == "DOMICILIO" %}
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">TELEMETRÍA GPS EN TIEMPO REAL (25s)</p>
+          <h2>Seguimiento de Entrega en Mapa</h2>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <span id="mm-ws-status" class="badge pendiente">Conectando GPS...</span>
+          <button type="button" id="mm-btn-centrar-mapa" class="button secondary small">Centrar ruta</button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-4 mb-4 text-xs">
+        <div class="rounded-lg border border-mm-line bg-mm-canvas/60 p-3">
+          <span class="text-mm-muted block">Repartidor asignado</span>
+          <strong id="mm-trk-repartidor" class="text-mm-ink text-sm">
+            {% if pedido.id_repartidor %}
+              {{ pedido.id_repartidor.id_repartidor.nombre_completo }}
+            {% else %}
+              Sin asignar
+            {% endif %}
+          </strong>
+        </div>
+        <div class="rounded-lg border border-mm-line bg-mm-canvas/60 p-3">
+          <span class="text-mm-muted block">Velocidad GPS</span>
+          <strong id="mm-trk-velocidad" class="text-mm-ink text-sm">—</strong>
+        </div>
+        <div class="rounded-lg border border-mm-line bg-mm-canvas/60 p-3">
+          <span class="text-mm-muted block">Rumbo (Orientación)</span>
+          <strong id="mm-trk-rumbo" class="text-mm-ink text-sm">—</strong>
+        </div>
+        <div class="rounded-lg border border-mm-line bg-mm-canvas/60 p-3">
+          <span class="text-mm-muted block">Último pulso recibido</span>
+          <strong id="mm-trk-actualizacion" class="text-mm-ink text-sm">Sincronizando...</strong>
+        </div>
+      </div>
+
+      <div id="mm-tracking-map" class="mm-tracking-map"></div>
+      <div class="mt-2.5 flex flex-wrap items-center gap-4 text-xs text-mm-muted">
+        <span>🏪 <strong class="text-mm-ink">Sucursal:</strong> {{ pedido.id_sucursal.nombre }}</span>
+        <span>🛵 <strong class="text-mm-ink">Repartidor:</strong> Actualización automática cada 25 segundos</span>
+        <span>🏠 <strong class="text-mm-ink">Destino:</strong> {% if direccion %}{{ direccion.detalle_direccion }}{% else %}Dirección del cliente{% endif %}</span>
+      </div>
+    </section>
+
+    <script>
+      window.MM_TRACKING_CONFIG = {
+        idPedido: {{ pedido.id_pedido }},
+        estadoPedido: "{{ pedido.estado }}",
+        apiBase: "{{ fastapi_base_url|escapejs }}",
+        wsBase: "{{ fastapi_ws_url|escapejs }}",
+        jwtToken: "{{ jwt_seguimiento|escapejs }}",
+        estadoInicial: {{ seguimiento_inicial_json|safe }}
+      };
+    </script>
+    <script src="{% static 'tienda/tracking.js' %}?v=20261108"></script>
+  {% endif %}
 
   <section class="panel">
     <div class="section-heading">

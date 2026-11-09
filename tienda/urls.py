@@ -73,6 +73,7 @@ urlpatterns = [
         name="admin-categoria-eliminar",
     ),
     path("administracion/inventario/", views.inventario_admin, name="admin-inventario"),
+    path("administracion/stock-general/", views.stock_general_admin, name="admin-stock-general"),
     path(
         "administracion/inventario/crear/",
         views.inventario_admin_form,

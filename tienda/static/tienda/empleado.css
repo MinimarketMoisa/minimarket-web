@@ -250,6 +250,44 @@ hr { margin: 16px 0; border: 0; border-top: 1px solid var(--line); }
 .portal-actions { display: flex; flex-wrap: wrap; gap: 7px; min-width: 170px; }
 .portal-actions form { margin: 0; }
 
+/* Rastreo GPS en vivo (Leaflet + OpenStreetMap) */
+.mm-tracking-map {
+  width: 100%;
+  height: 360px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #e9f0ec;
+  z-index: 1;
+}
+.mm-leaflet-div-icon { background: transparent; border: 0; }
+.mm-pin {
+  position: relative;
+  display: flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 2.5px solid #fff;
+  box-shadow: 0 4px 12px rgba(23, 43, 37, 0.25);
+  font-size: 18px;
+}
+.mm-pin-tienda { background: #707d0c; color: #fff; }
+.mm-pin-casa { background: #f67300; color: #fff; }
+.mm-pin-moto { background: #0284c7; color: #fff; }
+.mm-pin-flecha {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  margin-left: -6px;
+  font-size: 11px;
+  line-height: 1;
+  color: #0284c7;
+  text-shadow: 0 0 3px #fff;
+  transform-origin: 50% 24px;
+  transition: transform .35s ease;
+}
+
 @media (max-width: 900px) {
   .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

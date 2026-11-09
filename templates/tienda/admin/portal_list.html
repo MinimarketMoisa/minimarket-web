@@ -7,11 +7,16 @@
       <h1>{{ title }}</h1>
       {% if description %}<p class="muted text-sm">{{ description }}</p>{% endif %}
     </div>
-    <div class="flex items-center gap-3">
+    <div class="flex flex-wrap items-center gap-2.5">
       {% if total_registros is not None %}
         <span class="badge">{{ total_registros }} registro{{ total_registros|pluralize:"s" }}</span>
       {% else %}
         <span class="badge">{{ items|length }} registro{{ items|length|pluralize:"s" }}</span>
+      {% endif %}
+      {% if extra_links %}
+        {% for link in extra_links %}
+          <a class="button secondary" href="{{ link.url }}">{{ link.label }}</a>
+        {% endfor %}
       {% endif %}
       {% if create_url %}<a class="button primary" href="{{ create_url }}">+ Agregar</a>{% endif %}
     </div>
@@ -23,9 +28,65 @@
         <span>Buscar</span>
         <input type="search" name="q" value="{{ busqueda }}" placeholder="Escribe para filtrar registros...">
       </label>
+      {% if sucursales %}
+        <label class="field compact">
+          <span>Sucursal</span>
+          <select name="id_sucursal" onchange="this.form.submit()">
+            <option value="">Todas las sucursales</option>
+            {% for suc in sucursales %}
+              <option value="{{ suc.pk }}" {% if suc.pk|stringformat:"s" == sucursal_filtro %}selected{% endif %}>{{ suc.nombre }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      {% endif %}
+      {% if categorias %}
+        <label class="field compact">
+          <span>Categoría</span>
+          <select name="id_categoria" onchange="this.form.submit()">
+            <option value="">Todas las categorías</option>
+            {% for cat in categorias %}
+              <option value="{{ cat.pk }}" {% if cat.pk|stringformat:"s" == categoria_filtro %}selected{% endif %}>{{ cat.nombre }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      {% endif %}
+      {% if estados_opciones %}
+        <label class="field compact">
+          <span>Estado</span>
+          <select name="estado" onchange="this.form.submit()">
+            <option value="">Todos los estados</option>
+            {% for cod, nombre in estados_opciones %}
+              <option value="{{ cod }}" {% if cod == estado_filtro %}selected{% endif %}>{{ nombre }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      {% endif %}
+      {% if metodos_pago_opciones %}
+        <label class="field compact">
+          <span>Método de pago</span>
+          <select name="metodo_pago" onchange="this.form.submit()">
+            <option value="">Todos los métodos</option>
+            {% for cod, nombre in metodos_pago_opciones %}
+              <option value="{{ cod }}" {% if cod == metodo_pago_filtro %}selected{% endif %}>{{ nombre }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      {% endif %}
+      {% if mostrar_filtro_stock %}
+        <label class="field compact">
+          <span>Nivel de stock</span>
+          <select name="bajo" onchange="this.form.submit()">
+            <option value="">Todos los niveles</option>
+            <option value="1" {% if stock_filtro == "1" %}selected{% endif %}>Bajo stock (≤ {{ umbral_bajo_stock|default:10 }})</option>
+            <option value="agotado" {% if stock_filtro == "agotado" %}selected{% endif %}>Agotados (0)</option>
+          </select>
+        </label>
+      {% endif %}
       <div class="flex gap-2">
-        <button class="button secondary" type="submit">Buscar</button>
-        {% if busqueda %}<a class="button secondary" href="?">Limpiar</a>{% endif %}
+        <button class="button primary" type="submit">Filtrar</button>
+        {% if busqueda or sucursal_filtro or categoria_filtro or estado_filtro or metodo_pago_filtro or stock_filtro %}
+          <a class="button secondary" href="?">Limpiar</a>
+        {% endif %}
       </div>
     </form>
 

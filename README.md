@@ -89,14 +89,8 @@ Acceso al portal: [http://127.0.0.1:8080/empleados/login/](http://127.0.0.1:8080
 ---
 
 ## Despliegue en VPS (Producción)
-El proyecto incluye soporte para **Gunicorn**, **WhiteNoise** y **Docker**:
+El proyecto incluye soporte directo para **Gunicorn** y **WhiteNoise**:
 
-### Opción A — Con Docker (Recomendada para VPS)
-```bash
-docker compose up -d --build
-```
-
-### Opción B — Script automatizado
 ```bash
 chmod +x deploy_vps.sh
 ./deploy_vps.sh
@@ -119,8 +113,7 @@ minimarket-web/
 │   ├── admin/              # Vistas administrativas y soporte
 │   ├── empleado/           # Vistas de operaciones de sucursal
 │   └── partials/           # Componentes reutilizables (sidebar, etc.)
-├── Dockerfile              # Empaquetado para despliegue en servidor
-├── docker-compose.yml      # Orquestación de producción
+├── deploy_vps.sh           # Despliegue directo con Gunicorn y WhiteNoise
 ├── requirements.txt        # Dependencias de Python
 └── cambios.md              # Registro detallado de optimizaciones y cambios
 ```

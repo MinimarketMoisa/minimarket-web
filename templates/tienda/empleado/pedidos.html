@@ -5,7 +5,7 @@
     <div>
       <p class="eyebrow">OPERACIONES</p>
       <h1>Pedidos de sucursal</h1>
-      <p class="muted text-sm">Pedidos pendientes y preparados activos para tu sucursal.</p>
+      <p class="muted text-sm">Pedidos pendientes, preparados y en ruta activos para tu sucursal.</p>
     </div>
   </section>
 
@@ -16,10 +16,11 @@
     </label>
     <label class="field compact">
       <span>Estado</span>
-      <select name="estado">
-        <option value="">Todos</option>
+      <select name="estado" onchange="this.form.submit()">
+        <option value="">Todos los activos</option>
         <option value="PENDIENTE" {% if estado_filtro == "PENDIENTE" %}selected{% endif %}>Pendiente</option>
         <option value="PREPARADO" {% if estado_filtro == "PREPARADO" %}selected{% endif %}>Preparado</option>
+        <option value="EN_RUTA" {% if estado_filtro == "EN_RUTA" %}selected{% endif %}>En ruta (GPS)</option>
       </select>
     </label>
     <div class="flex gap-2">
@@ -40,7 +41,7 @@
               <th>Cliente</th>
               <th>Fecha</th>
               <th>Entrega</th>
-              <th>Pago</th>
+              <th>Método / Pago</th>
               <th>Estado</th>
               <th>Total</th>
               <th></th>
@@ -54,14 +55,19 @@
                 <td class="text-xs text-mm-muted whitespace-nowrap">{{ pedido.fecha_creacion|date:"d/m/Y H:i" }}</td>
                 <td>{{ pedido.get_tipo_entrega_display }}</td>
                 <td>
-                  <span class="badge {% if pedido.estado_pago == 'PAGADO' %}aprobado{% else %}pendiente{% endif %}">
-                    {{ pedido.get_estado_pago_display }}
-                  </span>
+                  <div class="flex flex-wrap items-center gap-1.5">
+                    <span class="text-xs font-medium text-mm-ink">{{ pedido.get_metodo_pago_display }}</span>
+                    <span class="badge {% if pedido.estado_pago == 'PAGADO' %}aprobado{% else %}pendiente{% endif %}">
+                      {{ pedido.get_estado_pago_display }}
+                    </span>
+                  </div>
                 </td>
                 <td><span class="badge {{ pedido.estado|lower }}">{{ pedido.get_estado_display }}</span></td>
                 <td class="font-semibold">$ {{ pedido.total|floatformat:2 }}</td>
                 <td class="text-right">
-                  <a class="button small secondary" href="{% url 'tienda:pedido-detalle' pedido.id_pedido %}">Gestionar</a>
+                  <a class="button small secondary" href="{% url 'tienda:pedido-detalle' pedido.id_pedido %}">
+                    {% if pedido.estado == "EN_RUTA" %}Seguir GPS{% else %}Gestionar{% endif %}
+                  </a>
                 </td>
               </tr>
             {% endfor %}
