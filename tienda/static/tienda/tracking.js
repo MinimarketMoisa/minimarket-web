@@ -183,15 +183,13 @@
         zoom: 14,
         scrollWheelZoom: false,
       });
-      // Servidor de teselas CartoDB Voyager (basado en OpenStreetMap, sin bloqueo HTTP 403)
+      // Servidor de teselas Esri ArcGIS World Street Map (libre de bloqueos y sin marcas de agua de API Key)
       L.tileLayer(
-        "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
         {
-          subdomains: "abcd",
           maxZoom: 19,
-          referrerPolicy: "strict-origin-when-cross-origin",
           attribution:
-            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            "Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, METI, TomTom",
         }
       ).addTo(map);
       setTimeout(function () {
