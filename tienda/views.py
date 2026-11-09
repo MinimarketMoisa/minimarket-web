@@ -226,12 +226,15 @@ def _contexto_seguimiento_pedido(request: HttpRequest, pedido: Pedido, direccion
             "nombre_completo": usuario_rep.nombre_completo if usuario_rep else "Repartidor",
             "telefono": usuario_rep.telefono if usuario_rep else None,
             "estado_operativo": perfil_rep.estado_operativo,
-            "latitud": float(perfil_rep.ultima_latitud)
-            if perfil_rep.ultima_latitud is not None
+            "latitud": float(perfil_rep.latitud_actual)
+            if perfil_rep.latitud_actual is not None
             else (float(sucursal.latitud) if sucursal and sucursal.latitud is not None else None),
-            "longitud": float(perfil_rep.ultima_longitud)
-            if perfil_rep.ultima_longitud is not None
+            "longitud": float(perfil_rep.longitud_actual)
+            if perfil_rep.longitud_actual is not None
             else (float(sucursal.longitud) if sucursal and sucursal.longitud is not None else None),
+            "ultima_actualizacion": perfil_rep.ultima_actualizacion.isoformat()
+            if perfil_rep.ultima_actualizacion is not None
+            else None,
         }
         if perfil_rep
         else None,
