@@ -20,7 +20,15 @@
       <h1>{% if pedido.codigo_pedido %}{{ pedido.codigo_pedido }}{% else %}Pedido #{{ pedido.id_pedido }}{% endif %}</h1>
       <p class="muted text-sm">Creado el {{ pedido.fecha_creacion|date:"d/m/Y H:i" }}</p>
     </div>
-    <span id="mm-pedido-estado-badge" class="badge {{ pedido.estado|lower }} text-sm px-3.5 py-1.5">{{ pedido.get_estado_display }}</span>
+    <div class="flex flex-wrap items-center gap-2.5">
+      <a class="button secondary small" href="{% url 'tienda:pedido-documento' pedido.id_pedido %}">
+        🖨️ Comprobante / Orden
+      </a>
+      <a class="button secondary small" href="{% url 'tienda:pedido-documento' pedido.id_pedido %}?formato=ticket">
+        🧾 Ticket 80mm
+      </a>
+      <span id="mm-pedido-estado-badge" class="badge {{ pedido.estado|lower }} text-sm px-3.5 py-1.5">{{ pedido.get_estado_display }}</span>
+    </div>
   </section>
 
   {% with lista_detalles=pedido.detalles.all %}
@@ -95,18 +103,15 @@
       {% endif %}
 
       <hr>
-      <p class="eyebrow">PAGO Y PASARELA</p>
+      <p class="eyebrow">PAGO</p>
       <div class="flex flex-wrap items-center gap-2">
         <span id="mm-pedido-metodo-texto" class="font-medium">{{ pedido.get_metodo_pago_display }}</span>
         <span id="mm-pedido-pago-badge" class="badge {% if pedido.estado_pago == 'PAGADO' %}aprobado{% else %}pendiente{% endif %}">
           {{ pedido.get_estado_pago_display }}
         </span>
       </div>
-      {% if pedido.metodo_pago == "TARJETA" or pedido.metodo_pago == "WOMPI" %}
-        <p class="text-xs text-sky-700 font-medium pt-1">Pasarela de tarjeta Wompi Sandbox</p>
-      {% endif %}
       {% if pedido.total > 50 %}
-        <p class="text-xs text-mm-muted pt-0.5">Pedido mayor a $50.00 (pago con tarjeta / Wompi).</p>
+        <p class="text-xs text-mm-muted pt-0.5">Pedido mayor a $50.00 (pago con Tarjeta).</p>
       {% endif %}
     </aside>
   </div>

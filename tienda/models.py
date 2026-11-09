@@ -299,8 +299,8 @@ class Pedido(models.Model):
     METODO_PAGO_CHOICES = [
         ("CONTRA_ENTREGA", "Contra entrega"),
         ("TRANSFERENCIA", "Transferencia"),
-        ("WOMPI", "Wompi (Tarjeta Crédito/Débito)"),
-        ("TARJETA", "Tarjeta / Wompi"),
+        ("WOMPI", "Tarjeta"),
+        ("TARJETA", "Tarjeta"),
     ]
 
     ESTADO_PAGO_CHOICES = [("PENDIENTE", "Pendiente"), ("PAGADO", "Pagado")]

@@ -329,7 +329,7 @@
           if (elMetodoPagoTexto && msg.metodo_pago) {
             elMetodoPagoTexto.textContent =
               msg.metodo_pago === "TARJETA" || msg.metodo_pago === "WOMPI"
-                ? "Tarjeta / Wompi"
+                ? "Tarjeta"
                 : msg.metodo_pago;
           }
         }

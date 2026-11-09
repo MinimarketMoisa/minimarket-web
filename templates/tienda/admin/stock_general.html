@@ -13,6 +13,9 @@
       </p>
     </div>
     <div class="flex flex-wrap items-center gap-2.5">
+      <a class="button secondary" href="{% url 'tienda:admin-inventario-documento' %}{% if query_base %}?{{ query_base }}{% endif %}">
+        🖨️ Imprimir hoja de control
+      </a>
       <a class="button secondary" href="{% url 'tienda:admin-inventario' %}{% if sucursal_filtro %}?id_sucursal={{ sucursal_filtro }}{% endif %}">
         Vista por registro
       </a>
@@ -92,7 +95,17 @@
               <th>Categoría</th>
               <th>Precio</th>
               <th>Stock Total</th>
-              <th>Ubicación por Sucursal (Dónde están)</th>
+              <th>
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <span>Existencias por Sucursal</span>
+                  <span class="inline-flex items-center gap-3 text-[10px] font-semibold normal-case tracking-normal text-mm-muted">
+                    <span class="inline-flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-emerald-500"></span>Óptimo</span>
+                    <span class="inline-flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-amber-500"></span>Bajo</span>
+                    <span class="inline-flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-red-500"></span>Agotado (0)</span>
+                    <span class="inline-flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-slate-300"></span>Sin asignar (—)</span>
+                  </span>
+                </div>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -117,32 +130,35 @@
                   </div>
                 </td>
                 <td>
-                  <div class="flex flex-wrap gap-1.5">
+                  <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-1.5 min-w-[340px]">
                     {% for ub in prod.ubicaciones %}
                       {% if ub.id_inventario %}
                         <a href="{% url 'tienda:admin-inventario-editar' ub.id_inventario %}"
-                           title="Editar stock en {{ ub.sucursal }}"
-                           class="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition
+                           title="{{ ub.sucursal }}: {{ ub.stock }} unidades (clic para editar)"
+                           class="flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-xs transition
                            {% if ub.stock == 0 %}
-                             border-red-200 bg-red-50 text-red-800 hover:bg-red-100
+                             border-red-200 bg-red-50/70 text-red-900 hover:bg-red-100/80
                            {% elif ub.es_bajo %}
-                             border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100
+                             border-amber-200 bg-amber-50/70 text-amber-900 hover:bg-amber-100/80
                            {% else %}
-                             border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100
+                             border-mm-line bg-white text-mm-ink hover:border-mm-green hover:bg-mm-canvas/60
                            {% endif %}">
-                          <span>{{ ub.sucursal }}:</span>
-                          <strong>{{ ub.stock }}</strong>
-                          {% if ub.stock == 0 %}
-                            <span class="text-[10px] uppercase font-extrabold">Agotado</span>
-                          {% elif ub.es_bajo %}
-                            <span class="text-[10px] uppercase font-extrabold">Bajo</span>
-                          {% endif %}
+                          <span class="inline-flex items-center gap-1.5 truncate font-medium">
+                            <span class="h-2 w-2 rounded-full shrink-0 {% if ub.stock == 0 %}bg-red-500{% elif ub.es_bajo %}bg-amber-500{% else %}bg-emerald-500{% endif %}"></span>
+                            <span class="truncate">{{ ub.sucursal_corta|default:ub.sucursal }}</span>
+                          </span>
+                          <strong class="font-bold tabular-nums {% if ub.stock == 0 %}text-red-700{% elif ub.es_bajo %}text-amber-800{% else %}text-emerald-800{% endif %}">
+                            {{ ub.stock }}
+                          </strong>
                         </a>
                       {% else %}
-                        <span class="inline-flex items-center gap-1.5 rounded-lg border border-mm-line bg-mm-canvas px-2.5 py-1 text-xs text-mm-muted">
-                          <span>{{ ub.sucursal }}:</span>
-                          <strong>0</strong>
-                          <span class="text-[10px] uppercase font-bold">Sin registro</span>
+                        <span title="{{ ub.sucursal }}: sin registro de inventario"
+                              class="flex items-center justify-between gap-2 rounded-lg border border-dashed border-mm-line bg-mm-canvas/40 px-2.5 py-1.5 text-xs text-mm-muted">
+                          <span class="inline-flex items-center gap-1.5 truncate">
+                            <span class="h-2 w-2 rounded-full shrink-0 bg-slate-300"></span>
+                            <span class="truncate">{{ ub.sucursal_corta|default:ub.sucursal }}</span>
+                          </span>
+                          <strong class="font-semibold tabular-nums text-mm-muted">—</strong>
                         </span>
                       {% endif %}
                     {% endfor %}

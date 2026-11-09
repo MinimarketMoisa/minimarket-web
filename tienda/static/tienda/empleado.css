@@ -324,3 +324,11 @@ hr { margin: 16px 0; border: 0; border-top: 1px solid var(--line); }
   .actions-grid > form, .actions-grid .button, .portal-actions form, .portal-actions .button { width: 100%; }
   .panel { padding: 16px; }
 }
+
+@media print {
+  body { background: #fff; }
+  .sidebar, .topbar, .filter-bar, .pagination, .actions-panel, .portal-actions, .button { display: none !important; }
+  .app-main { margin-left: 0 !important; }
+  .portal-container { padding: 0 !important; }
+  .panel, .stat-card { box-shadow: none !important; break-inside: avoid; }
+}

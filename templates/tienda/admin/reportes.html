@@ -36,6 +36,15 @@
     {% if sucursal_filtro %}
       <a class="button secondary small" href="?mes_anio={{ mes_seleccionado }}">Todas</a>
     {% endif %}
+    {% if portal == "empleado" %}
+      <a class="button secondary small" href="{% url 'tienda:empleado-reportes-documento' %}?mes_anio={{ mes_seleccionado }}">
+        🖨️ Generar informe
+      </a>
+    {% else %}
+      <a class="button secondary small" href="{% url 'tienda:admin-reportes-documento' %}?mes_anio={{ mes_seleccionado }}{% if sucursal_filtro %}&id_sucursal={{ sucursal_filtro }}{% endif %}">
+        🖨️ Generar informe
+      </a>
+    {% endif %}
   </form>
 </section>
 
@@ -67,10 +76,10 @@
   </div>
 
   <div class="panel mb-0 p-5 border-t-4 border-t-violet-500">
-    <p class="eyebrow text-violet-600">MÉTODOS DE PAGO (WOMPI / OTROS)</p>
+    <p class="eyebrow text-violet-600">MÉTODOS DE PAGO</p>
     <div class="mt-2 flex flex-col gap-1.5 text-sm text-mm-ink">
       <div class="flex justify-between items-center">
-        <span>Wompi / Tarjeta <small class="text-xs text-mm-muted">({{ wompi_count }})</small>:</span>
+        <span>Tarjeta <small class="text-xs text-mm-muted">({{ wompi_count }})</small>:</span>
         <strong>$ {{ ventas_wompi|floatformat:2 }}</strong>
       </div>
       <div class="flex justify-between items-center">
@@ -103,8 +112,8 @@
   <section class="panel mb-0">
     <div class="section-heading">
       <div>
-        <p class="eyebrow">DISTRIBUCIÓN POR PASARELA</p>
-        <h2>Wompi, Transferencia y Efectivo</h2>
+        <p class="eyebrow">DISTRIBUCIÓN POR MÉTODO DE PAGO</p>
+        <h2>Tarjeta, Transferencia y Efectivo</h2>
       </div>
     </div>
     <div class="relative h-[300px] flex items-center justify-center">
@@ -229,7 +238,7 @@
     new Chart(canvasMetodos.getContext('2d'), {
       type: 'doughnut',
       data: {
-        labels: ['Wompi / Tarjeta', 'Transferencia', 'Contra Entrega'],
+        labels: ['Tarjeta', 'Transferencia', 'Contra Entrega'],
         datasets: [{
           data: [{{ ventas_wompi|stringformat:".2f" }}, {{ ventas_transferencia|stringformat:".2f" }}, {{ ventas_efectivo|stringformat:".2f" }}],
           backgroundColor: ['#0ea5e9', '#9caa17', '#f67300'],

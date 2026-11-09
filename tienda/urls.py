@@ -16,7 +16,17 @@ urlpatterns = [
         views.pedido_admin_detalle,
         name="admin-pedido-detalle",
     ),
+    path(
+        "administracion/pedidos/<int:id_pedido>/documento/",
+        views.pedido_admin_documento,
+        name="admin-pedido-documento",
+    ),
     path("administracion/reportes/", views.reportes_admin, name="admin-reportes"),
+    path(
+        "administracion/reportes/documento/",
+        views.reportes_admin_documento,
+        name="admin-reportes-documento",
+    ),
     path("administracion/denuncias/", views.denuncias_admin, name="admin-denuncias"),
     path(
         "administracion/denuncias/<int:id_denuncia>/",
@@ -73,6 +83,11 @@ urlpatterns = [
         name="admin-categoria-eliminar",
     ),
     path("administracion/inventario/", views.inventario_admin, name="admin-inventario"),
+    path(
+        "administracion/inventario/documento/",
+        views.inventario_admin_documento,
+        name="admin-inventario-documento",
+    ),
     path("administracion/stock-general/", views.stock_general_admin, name="admin-stock-general"),
     path(
         "administracion/inventario/crear/",
@@ -123,12 +138,27 @@ urlpatterns = [
         name="pedido-detalle",
     ),
     path(
+        "empleados/pedidos/<int:id_pedido>/documento/",
+        views.pedido_empleado_documento,
+        name="pedido-documento",
+    ),
+    path(
         "empleados/pedidos/<int:id_pedido>/accion/",
         views.accion_pedido,
         name="pedido-accion",
     ),
     path("empleados/reportes/", views.reportes_empleado, name="empleado-reportes"),
+    path(
+        "empleados/reportes/documento/",
+        views.reportes_empleado_documento,
+        name="empleado-reportes-documento",
+    ),
     path("empleados/inventario/", views.inventario_empleado, name="inventario"),
+    path(
+        "empleados/inventario/documento/",
+        views.inventario_empleado_documento,
+        name="empleado-inventario-documento",
+    ),
 
     path(
         "empleados/inventario/<int:id_producto>/",

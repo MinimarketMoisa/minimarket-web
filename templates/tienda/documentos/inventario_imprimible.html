@@ -1,0 +1,249 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ titulo_documento }} | MiniMarket</title>
+  <style>
+    :root {
+      --ink: #172b25;
+      --muted: #5a6b65;
+      --line: #d5e0db;
+      --green: #707d0c;
+      --orange: #f67300;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #eef3f0;
+      color: var(--ink);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 12.5px;
+      line-height: 1.4;
+    }
+    .doc-toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 24px;
+      background: #172b25;
+      color: #fff;
+    }
+    .doc-toolbar-group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .doc-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 7px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+      font: inherit;
+      font-size: 12.5px;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .doc-btn:hover { background: rgba(255, 255, 255, 0.18); }
+    .doc-btn.primary { background: var(--orange); border-color: var(--orange); font-weight: 700; }
+    .doc-btn.primary:hover { background: #cf5e00; }
+
+    .doc-sheet {
+      width: min(100% - 32px, 980px);
+      margin: 24px auto 48px;
+      padding: 34px 38px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(23, 43, 37, 0.06);
+    }
+    .doc-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 20px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid var(--ink);
+    }
+    .doc-brand img { height: 42px; width: auto; display: block; margin-bottom: 6px; }
+    .doc-type {
+      margin: 0;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--green);
+    }
+    .doc-title { margin: 4px 0; font-size: 21px; font-weight: 800; }
+    .doc-meta { margin: 2px 0; color: var(--muted); font-size: 12px; }
+
+    .kpi-strip {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+    .kpi-cell {
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fafcfa;
+    }
+    .kpi-cell span { display: block; font-size: 11px; color: var(--muted); }
+    .kpi-cell strong { font-size: 18px; font-weight: 800; color: var(--ink); }
+
+    table.doc-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+    table.doc-table th {
+      padding: 8px 9px;
+      background: #f4f8f5;
+      border-top: 1px solid var(--ink);
+      border-bottom: 1px solid var(--ink);
+      font-size: 10.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      text-align: left;
+    }
+    table.doc-table td {
+      padding: 8px 9px;
+      border-bottom: 1px solid #e6eeea;
+      font-size: 12px;
+    }
+    table.doc-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+    table.doc-table .center { text-align: center; }
+    .check-box {
+      display: inline-block;
+      width: 58px;
+      height: 20px;
+      border: 1px solid #9ab0a6;
+      border-radius: 4px;
+    }
+    .signatures {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 40px;
+      margin-top: 44px;
+    }
+    .sig-line {
+      border-top: 1px solid var(--ink);
+      padding-top: 6px;
+      text-align: center;
+      font-size: 11.5px;
+      color: var(--muted);
+    }
+    @media print {
+      body { background: #fff; }
+      .doc-toolbar { display: none !important; }
+      .doc-sheet {
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+        box-shadow: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="doc-toolbar">
+    <div class="doc-toolbar-group">
+      <a class="doc-btn" href="{{ volver_url }}">← Volver al inventario</a>
+    </div>
+    <div class="doc-toolbar-group">
+      <button type="button" class="doc-btn primary" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+    </div>
+  </header>
+
+  <main class="doc-sheet">
+    <div class="doc-header">
+      <div class="doc-brand">
+        <img src="{% static 'tienda/logo-minimarket.png' %}" alt="MiniMarket">
+        <p class="doc-meta"><strong>Ámbito:</strong> {{ ambito_nombre }}</p>
+        {% if filtro_descripcion %}<p class="doc-meta"><strong>Filtros aplicados:</strong> {{ filtro_descripcion }}</p>{% endif %}
+      </div>
+      <div style="text-align: right;">
+        <p class="doc-type">CONTROL FÍSICO Y ABASTECIMIENTO</p>
+        <h1 class="doc-title">{{ titulo_documento }}</h1>
+        <p class="doc-meta">Fecha de emisión: {{ fecha_impresion|date:"d/m/Y H:i" }}</p>
+        <p class="doc-meta">Emitido por: {{ generado_por }}</p>
+      </div>
+    </div>
+
+    <div class="kpi-strip">
+      <div class="kpi-cell">
+        <span>Registros listados</span>
+        <strong>{{ total_registros }}</strong>
+      </div>
+      <div class="kpi-cell">
+        <span>Unidades totales</span>
+        <strong>{{ total_unidades }} uds</strong>
+      </div>
+      <div class="kpi-cell">
+        <span>En bajo stock (≤ {{ umbral_bajo_stock }} uds)</span>
+        <strong>{{ total_bajo_stock }}</strong>
+      </div>
+      <div class="kpi-cell">
+        <span>Agotados (0 uds)</span>
+        <strong>{{ total_agotados }}</strong>
+      </div>
+    </div>
+
+    <table class="doc-table">
+      <thead>
+        <tr>
+          <th style="width: 36px;" class="center">#</th>
+          <th>Sucursal</th>
+          <th>Código</th>
+          <th>Producto</th>
+          <th>Categoría</th>
+          <th class="num">Existencias</th>
+          <th class="center">Estado</th>
+          <th class="center">Vencimiento</th>
+          <th class="center" style="width: 90px;">Conteo Físico</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in filas %}
+          <tr>
+            <td class="center">{{ forloop.counter }}</td>
+            <td>{{ item.sucursal }}</td>
+            <td>{{ item.codigo_barras|default:"—" }}</td>
+            <td><strong>{{ item.producto }}</strong></td>
+            <td>{{ item.categoria }}</td>
+            <td class="num"><strong>{{ item.stock }} uds</strong></td>
+            <td class="center">{{ item.estado }}</td>
+            <td class="center">{{ item.vencimiento|default:"—" }}</td>
+            <td class="center"><span class="check-box"></span></td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="9" class="center">No hay registros de inventario para los criterios seleccionados.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="signatures">
+      <div class="sig-line">
+        <strong>Realizado / Contado por</strong><br>
+        Encargado de Inventario / Bodega
+      </div>
+      <div class="sig-line">
+        <strong>Revisado y Autorizado por</strong><br>
+        Administración MiniMarket
+      </div>
+    </div>
+  </main>
+</body>
+</html>

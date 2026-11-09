@@ -85,7 +85,7 @@ MESES_ES = (
 )
 
 METODOS_PAGO_FILTRO_CHOICES = (
-    ("WOMPI", "Wompi / Tarjeta"),
+    ("TARJETA", "Tarjeta"),
     ("TRANSFERENCIA", "Transferencia"),
     ("CONTRA_ENTREGA", "Contra entrega"),
 )
@@ -124,11 +124,20 @@ def _badge(texto: str, variante: str = ""):
     return format_html('<span class="{}">{}</span>', clase, texto)
 
 
+def _nombre_sucursal_corto(nombre: str) -> str:
+    limpio = (nombre or "").strip()
+    if limpio.lower().startswith("minimarket "):
+        return limpio[11:].strip() or limpio
+    return limpio
+
+
 def _badge_stock(stock: int):
     if stock <= 0:
         return format_html(
-            '<div class="flex items-center gap-1.5"><span class="stock low">0 uds</span>'
-            '<span class="badge cancelado">Agotado</span></div>'
+            '<div class="flex items-center gap-1.5"><span class="stock low">{} uds</span>'
+            '<span class="badge cancelado">{}</span></div>',
+            0,
+            "Agotado",
         )
     if stock <= UMBRAL_BAJO_STOCK:
         return format_html(
@@ -148,28 +157,38 @@ def _resumen_ubicaciones_html(producto: Producto, sucursal_id_filtro: int | None
     if sucursal_id_filtro is not None:
         inventarios = [inv for inv in inventarios if inv.id_sucursal_id == sucursal_id_filtro]
     if not inventarios:
-        return format_html('<span class="text-xs text-mm-muted">Sin stock asignado en sucursales</span>')
+        return format_html(
+            '<span class="text-xs text-mm-muted">{}</span>',
+            "Sin stock asignado en sucursales",
+        )
 
-    pills = []
+    items = []
     for inv in inventarios:
         stock = int(inv.stock_disponible or 0)
+        nombre_corto = _nombre_sucursal_corto(inv.id_sucursal.nombre)
         if stock == 0:
-            clases = "border-red-200 bg-red-50 text-red-800"
-            etiqueta = f"{inv.id_sucursal.nombre}: 0 (Agotado)"
+            clases_caja = "border-red-200 bg-red-50/70 text-red-900"
+            clases_punto = "bg-red-500"
+            clases_num = "text-red-700"
         elif stock <= UMBRAL_BAJO_STOCK:
-            clases = "border-amber-200 bg-amber-50 text-amber-900"
-            etiqueta = f"{inv.id_sucursal.nombre}: {stock} (Bajo)"
+            clases_caja = "border-amber-200 bg-amber-50/70 text-amber-900"
+            clases_punto = "bg-amber-500"
+            clases_num = "text-amber-800"
         else:
-            clases = "border-emerald-200 bg-emerald-50 text-emerald-900"
-            etiqueta = f"{inv.id_sucursal.nombre}: {stock}"
-        pills.append((clases, etiqueta))
+            clases_caja = "border-mm-line bg-white text-mm-ink"
+            clases_punto = "bg-emerald-500"
+            clases_num = "text-emerald-800"
+        items.append((inv.id_sucursal.nombre, clases_caja, clases_punto, nombre_corto, clases_num, stock))
 
     return format_html(
-        '<div class="flex flex-wrap gap-1">{}</div>',
+        '<div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5 min-w-[260px]">{}</div>',
         format_html_join(
             "",
-            '<span class="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold {}">{}</span>',
-            pills,
+            '<div title="{}" class="flex items-center justify-between gap-2 rounded-md border px-2 py-1 text-xs {}">'
+            '<span class="inline-flex items-center gap-1.5 truncate font-medium">'
+            '<span class="h-1.5 w-1.5 rounded-full shrink-0 {}"></span>{}</span>'
+            '<strong class="font-bold tabular-nums {}">{}</strong></div>',
+            items,
         ),
     )
 
@@ -524,8 +543,9 @@ def pedidos_admin(request: HttpRequest) -> HttpResponse:
         consulta = consulta.filter(estado=estado)
 
     metodo_pago = request.GET.get("metodo_pago", "").strip()
-    if metodo_pago == "WOMPI":
+    if metodo_pago in {"WOMPI", "TARJETA"}:
         consulta = consulta.filter(metodo_pago__in=["WOMPI", "TARJETA"])
+        metodo_pago = "TARJETA"
     elif metodo_pago in {"TRANSFERENCIA", "CONTRA_ENTREGA"}:
         consulta = consulta.filter(metodo_pago=metodo_pago)
 
@@ -542,7 +562,7 @@ def pedidos_admin(request: HttpRequest) -> HttpResponse:
     return _portal_list(
         request,
         title="Pedidos",
-        description="Historial completo. Filtra por sucursal, estado, método de pago (Wompi / Tarjeta) o código de pedido.",
+        description="Historial completo. Filtra por sucursal, estado, método de pago o código de pedido.",
         columns=("Código de Pedido", "Cliente", "Sucursal", "Método / Pago", "Estado", "Total", "Creado"),
         queryset=consulta.order_by("-fecha_creacion", "-id_pedido"),
         sucursales=Sucursal.objects.order_by("nombre"),
@@ -891,7 +911,13 @@ def inventario_admin(request: HttpRequest) -> HttpResponse:
         categoria_filtro=id_categoria,
         mostrar_filtro_stock=True,
         stock_filtro=stock_filtro,
-        extra_links=[{"url": reverse("tienda:admin-stock-general"), "label": "Ver stock general por producto"}],
+        extra_links=[
+            {"url": reverse("tienda:admin-stock-general"), "label": "Ver stock general por producto"},
+            {
+                "url": f"{reverse('tienda:admin-inventario-documento')}{'?' + request.GET.urlencode() if request.GET else ''}",
+                "label": "🖨️ Imprimir hoja de control",
+            },
+        ],
         row_builder=lambda i: {
             "cells": (
                 i.id_sucursal.nombre,
@@ -976,6 +1002,7 @@ def stock_general_admin(request: HttpRequest) -> HttpResponse:
                 {
                     "id_sucursal": suc.pk,
                     "sucursal": suc.nombre,
+                    "sucursal_corta": _nombre_sucursal_corto(suc.nombre),
                     "stock": stock_suc,
                     "es_bajo": es_bajo,
                     "id_inventario": inv.pk if inv is not None else None,
@@ -1770,3 +1797,278 @@ def denuncia_detalle_admin(request: HttpRequest, id_denuncia: int) -> HttpRespon
             "fecha_hoy": ahora_local,
         },
     )
+
+
+# ─── Generador de Documentos Imprimibles (Pedidos, Inventario y Métricas) ────
+
+def _render_pedido_imprimible(request: HttpRequest, pedido: Pedido, volver_url: str) -> HttpResponse:
+    detalles = list(pedido.detalles.select_related("id_producto").all())
+    subtotal_productos = sum((d.subtotal for d in detalles), Decimal("0.00"))
+    total_unidades = sum((int(d.cantidad or 0) for d in detalles), 0)
+    generado_por = (
+        getattr(request.user, "nombre_completo", "")
+        or getattr(request.user, "email", "")
+        or "Usuario"
+    )
+    return render(
+        request,
+        "tienda/documentos/pedido_imprimible.html",
+        {
+            "pedido": pedido,
+            "detalles": detalles,
+            "direccion": direccion_pedido(pedido),
+            "subtotal_productos": subtotal_productos,
+            "total_unidades": total_unidades,
+            "fecha_impresion": timezone.localtime(),
+            "generado_por": generado_por,
+            "volver_url": volver_url,
+        },
+    )
+
+
+@admin_required
+def pedido_admin_documento(request: HttpRequest, id_pedido: int) -> HttpResponse:
+    pedido = get_object_or_404(
+        Pedido.objects.select_related(
+            "id_cliente", "id_sucursal", "id_repartidor__id_repartidor"
+        ).prefetch_related("detalles__id_producto"),
+        id_pedido=id_pedido,
+    )
+    return _render_pedido_imprimible(
+        request,
+        pedido,
+        reverse("tienda:admin-pedido-detalle", args=[pedido.id_pedido]),
+    )
+
+
+@empleado_required
+def pedido_empleado_documento(request: HttpRequest, id_pedido: int) -> HttpResponse:
+    pedido = get_object_or_404(
+        Pedido.objects.select_related(
+            "id_cliente", "id_sucursal", "id_repartidor__id_repartidor"
+        ).prefetch_related("detalles__id_producto"),
+        id_pedido=id_pedido,
+        id_sucursal=request.sucursal_empleado,
+    )
+    return _render_pedido_imprimible(
+        request,
+        pedido,
+        reverse("tienda:pedido-detalle", args=[pedido.id_pedido]),
+    )
+
+
+@admin_required
+def inventario_admin_documento(request: HttpRequest) -> HttpResponse:
+    inventarios = _filtro_texto(
+        Inventario.objects.select_related("id_sucursal", "id_producto__id_categoria"),
+        request,
+        "id_producto__nombre",
+        "id_producto__codigo_barras",
+        "id_sucursal__nombre",
+    )
+    id_sucursal = request.GET.get("id_sucursal", "").strip()
+    sucursal_obj = None
+    if id_sucursal.isdecimal():
+        sucursal_obj = Sucursal.objects.filter(pk=int(id_sucursal)).first()
+        inventarios = inventarios.filter(id_sucursal_id=int(id_sucursal))
+
+    id_categoria = request.GET.get("id_categoria", "").strip()
+    categoria_obj = None
+    if id_categoria.isdecimal():
+        categoria_obj = Categoria.objects.filter(pk=int(id_categoria)).first()
+        inventarios = inventarios.filter(id_producto__id_categoria_id=int(id_categoria))
+
+    stock_filtro = request.GET.get("bajo", "").strip()
+    if stock_filtro == "agotado":
+        inventarios = inventarios.filter(stock_disponible=0)
+        titulo_doc = "Reporte de Productos Agotados"
+    elif stock_filtro == "1":
+        inventarios = inventarios.filter(stock_disponible__lte=UMBRAL_BAJO_STOCK)
+        titulo_doc = "Orden de Reabastecimiento (Bajo Stock)"
+    else:
+        titulo_doc = "Hoja de Control de Inventario Físico"
+
+    filas = []
+    total_unidades = 0
+    total_bajo = 0
+    total_agotados = 0
+    for inv in inventarios.order_by("id_sucursal__nombre", "id_producto__nombre"):
+        st = int(inv.stock_disponible or 0)
+        total_unidades += st
+        if st == 0:
+            total_agotados += 1
+            total_bajo += 1
+            estado_txt = "Agotado"
+        elif st <= UMBRAL_BAJO_STOCK:
+            total_bajo += 1
+            estado_txt = "Bajo stock"
+        else:
+            estado_txt = "Disponible"
+        filas.append(
+            {
+                "sucursal": inv.id_sucursal.nombre,
+                "codigo_barras": inv.id_producto.codigo_barras,
+                "producto": inv.id_producto.nombre,
+                "categoria": inv.id_producto.id_categoria.nombre,
+                "stock": st,
+                "estado": estado_txt,
+                "vencimiento": inv.fecha_vencimiento,
+            }
+        )
+
+    filtros_txt = []
+    if categoria_obj:
+        filtros_txt.append(f"Categoría: {categoria_obj.nombre}")
+    if stock_filtro == "1":
+        filtros_txt.append(f"Bajo stock (≤ {UMBRAL_BAJO_STOCK} uds)")
+    elif stock_filtro == "agotado":
+        filtros_txt.append("Solo agotados (0 uds)")
+    if request.GET.get("q"):
+        filtros_txt.append(f"Búsqueda: '{request.GET.get('q')}'")
+
+    volver_base = reverse("tienda:admin-inventario")
+    qs_str = request.GET.urlencode()
+    return render(
+        request,
+        "tienda/documentos/inventario_imprimible.html",
+        {
+            "titulo_documento": titulo_doc,
+            "ambito_nombre": sucursal_obj.nombre if sucursal_obj else "Todas las sucursales",
+            "filtro_descripcion": " · ".join(filtros_txt),
+            "filas": filas,
+            "total_registros": len(filas),
+            "total_unidades": total_unidades,
+            "total_bajo_stock": total_bajo,
+            "total_agotados": total_agotados,
+            "umbral_bajo_stock": UMBRAL_BAJO_STOCK,
+            "fecha_impresion": timezone.localtime(),
+            "generado_por": getattr(request.user, "nombre_completo", "") or request.user.email,
+            "volver_url": f"{volver_base}?{qs_str}" if qs_str else volver_base,
+        },
+    )
+
+
+@empleado_required
+def inventario_empleado_documento(request: HttpRequest) -> HttpResponse:
+    sucursal = request.sucursal_empleado
+    consulta = _productos_con_inventario(sucursal).select_related("id_categoria")
+    busqueda = request.GET.get("q", "").strip()
+    id_categoria = request.GET.get("id_categoria", "").strip()
+    stock_filtro = request.GET.get("bajo", "").strip()
+
+    if busqueda:
+        consulta = consulta.filter(
+            Q(nombre__icontains=busqueda) | Q(codigo_barras__icontains=busqueda)
+        )
+    if id_categoria.isdecimal():
+        consulta = consulta.filter(id_categoria_id=int(id_categoria))
+    if stock_filtro == "agotado":
+        consulta = consulta.filter(stock_disponible=0)
+        titulo_doc = "Reporte de Productos Agotados en Sucursal"
+    elif stock_filtro == "1":
+        consulta = consulta.filter(stock_disponible__lte=UMBRAL_BAJO_STOCK)
+        titulo_doc = "Orden de Reabastecimiento de Sucursal"
+    else:
+        titulo_doc = "Hoja de Control de Inventario de Sucursal"
+
+    filas = []
+    total_unidades = 0
+    total_bajo = 0
+    total_agotados = 0
+    for prod in consulta.order_by("nombre"):
+        st = int(prod.stock_disponible or 0)
+        total_unidades += st
+        if st == 0:
+            total_agotados += 1
+            total_bajo += 1
+            estado_txt = "Agotado"
+        elif st <= UMBRAL_BAJO_STOCK:
+            total_bajo += 1
+            estado_txt = "Bajo stock"
+        else:
+            estado_txt = "Disponible"
+        filas.append(
+            {
+                "sucursal": sucursal.nombre,
+                "codigo_barras": prod.codigo_barras,
+                "producto": prod.nombre,
+                "categoria": prod.id_categoria.nombre,
+                "stock": st,
+                "estado": estado_txt,
+                "vencimiento": prod.fecha_vencimiento,
+            }
+        )
+
+    volver_base = reverse("tienda:inventario")
+    qs_str = request.GET.urlencode()
+    return render(
+        request,
+        "tienda/documentos/inventario_imprimible.html",
+        {
+            "titulo_documento": titulo_doc,
+            "ambito_nombre": sucursal.nombre,
+            "filtro_descripcion": "",
+            "filas": filas,
+            "total_registros": len(filas),
+            "total_unidades": total_unidades,
+            "total_bajo_stock": total_bajo,
+            "total_agotados": total_agotados,
+            "umbral_bajo_stock": UMBRAL_BAJO_STOCK,
+            "fecha_impresion": timezone.localtime(),
+            "generado_por": getattr(request.user, "nombre_completo", "") or request.user.email,
+            "volver_url": f"{volver_base}?{qs_str}" if qs_str else volver_base,
+        },
+    )
+
+
+@admin_required
+def reportes_admin_documento(request: HttpRequest) -> HttpResponse:
+    anio, mes = _parse_mes_anio(request)
+    pedidos_qs = Pedido.objects.all()
+    id_sucursal = request.GET.get("id_sucursal", "").strip()
+    sucursal_seleccionada = None
+    if id_sucursal.isdecimal():
+        suc_id = int(id_sucursal)
+        pedidos_qs = pedidos_qs.filter(id_sucursal_id=suc_id)
+        sucursal_seleccionada = Sucursal.objects.filter(pk=suc_id).first()
+
+    metricas = _calcular_metricas_reportes(pedidos_qs, anio, mes)
+    volver_base = reverse("tienda:admin-reportes")
+    qs_str = request.GET.urlencode()
+    return render(
+        request,
+        "tienda/documentos/reporte_imprimible.html",
+        {
+            **metricas,
+            "ambito_nombre": (
+                sucursal_seleccionada.nombre
+                if sucursal_seleccionada
+                else "Consolidado Global (Todas las sucursales)"
+            ),
+            "fecha_impresion": timezone.localtime(),
+            "generado_por": getattr(request.user, "nombre_completo", "") or request.user.email,
+            "volver_url": f"{volver_base}?{qs_str}" if qs_str else volver_base,
+        },
+    )
+
+
+@empleado_required
+def reportes_empleado_documento(request: HttpRequest) -> HttpResponse:
+    anio, mes = _parse_mes_anio(request)
+    sucursal = request.sucursal_empleado
+    pedidos_qs = Pedido.objects.filter(id_sucursal=sucursal)
+    metricas = _calcular_metricas_reportes(pedidos_qs, anio, mes)
+    volver_base = reverse("tienda:empleado-reportes")
+    qs_str = request.GET.urlencode()
+    return render(
+        request,
+        "tienda/documentos/reporte_imprimible.html",
+        {
+            **metricas,
+            "ambito_nombre": sucursal.nombre,
+            "fecha_impresion": timezone.localtime(),
+            "generado_por": getattr(request.user, "nombre_completo", "") or request.user.email,
+            "volver_url": f"{volver_base}?{qs_str}" if qs_str else volver_base,
+        },
+    )
+

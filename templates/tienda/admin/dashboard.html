@@ -33,7 +33,7 @@
     <a class="stat-card border-l-4 border-l-mm-green" href="{% url 'tienda:admin-reportes' %}{% if sucursal_filtro %}?id_sucursal={{ sucursal_filtro }}{% endif %}">
       <span class="stat-label">Ventas confirmadas</span>
       <strong class="text-mm-ink">$ {{ ventas_entregadas|floatformat:2 }}</strong>
-      <span class="stat-foot">Pedidos entregados y pagos Wompi/Transferencia →</span>
+      <span class="stat-foot">Pedidos entregados y pagos con Tarjeta/Transferencia →</span>
     </a>
     <a class="stat-card" href="{% url 'tienda:admin-pedidos' %}{% if sucursal_filtro %}?id_sucursal={{ sucursal_filtro }}{% endif %}">
       <span class="stat-label">Pedidos de hoy</span>
@@ -73,6 +73,9 @@
         <span class="badge {% if inventario_bajo > 0 %}pendiente{% else %}aprobado{% endif %}">
           {{ inventario_bajo }} alerta{{ inventario_bajo|pluralize:"s" }} (≤ {{ umbral_bajo_stock }} uds)
         </span>
+        <a class="button secondary small" href="{% url 'tienda:admin-inventario-documento' %}?bajo=1{% if sucursal_filtro %}&id_sucursal={{ sucursal_filtro }}{% endif %}">
+          🖨️ Imprimir orden de abasto
+        </a>
         <a class="button secondary small" href="{% url 'tienda:admin-stock-general' %}?bajo=1{% if sucursal_filtro %}&id_sucursal={{ sucursal_filtro }}{% endif %}">
           Stock general por sucursal
         </a>

@@ -1,0 +1,450 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Comprobante {% if pedido.codigo_pedido %}{{ pedido.codigo_pedido }}{% else %}#{{ pedido.id_pedido }}{% endif %} | MiniMarket</title>
+  <style>
+    :root {
+      --ink: #172b25;
+      --muted: #5a6b65;
+      --line: #d5e0db;
+      --green: #707d0c;
+      --orange: #f67300;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      background: #eef3f0;
+      color: var(--ink);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .doc-toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 24px;
+      background: #172b25;
+      color: #fff;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+    }
+    .doc-toolbar-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+    .doc-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 7px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+      font: inherit;
+      font-size: 12.5px;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .doc-btn:hover { background: rgba(255, 255, 255, 0.18); }
+    .doc-btn.active {
+      background: #9caa17;
+      border-color: #9caa17;
+      color: #fff;
+    }
+    .doc-btn.primary {
+      background: var(--orange);
+      border-color: var(--orange);
+      color: #fff;
+      font-weight: 700;
+    }
+    .doc-btn.primary:hover { background: #cf5e00; }
+
+    .doc-sheet {
+      width: min(100% - 32px, 820px);
+      margin: 26px auto 48px;
+      padding: 36px 40px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(23, 43, 37, 0.06);
+    }
+
+    /* Modo Ticket Térmico 80mm */
+    body.modo-ticket .doc-sheet {
+      width: 320px;
+      padding: 18px 16px;
+      border-radius: 4px;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 12px;
+    }
+    body.modo-ticket .solo-a4 { display: none !important; }
+    body:not(.modo-ticket) .solo-ticket { display: none !important; }
+
+    .doc-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 20px;
+      padding-bottom: 18px;
+      border-bottom: 2px solid var(--ink);
+    }
+    .doc-brand img {
+      height: 46px;
+      width: auto;
+      display: block;
+      margin-bottom: 6px;
+    }
+    .doc-title-box {
+      text-align: right;
+    }
+    .doc-type {
+      margin: 0;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--green);
+    }
+    .doc-code {
+      margin: 3px 0 4px;
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .doc-meta {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin: 18px 0;
+    }
+    .info-box {
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fafcfa;
+    }
+    .info-box h3 {
+      margin: 0 0 6px;
+      font-size: 10.5px;
+      font-weight: 800;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--green);
+    }
+    .info-row {
+      margin: 3px 0;
+      font-size: 12.5px;
+    }
+    .info-row strong { color: var(--ink); }
+
+    table.doc-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    table.doc-table th {
+      padding: 9px 10px;
+      background: #f4f8f5;
+      border-top: 1px solid var(--ink);
+      border-bottom: 1px solid var(--ink);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      text-align: left;
+    }
+    table.doc-table td {
+      padding: 9px 10px;
+      border-bottom: 1px solid #e6eeea;
+      font-size: 12.5px;
+    }
+    table.doc-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+    table.doc-table .center { text-align: center; }
+
+    .totals-wrap {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 14px;
+    }
+    .totals-box {
+      width: min(100%, 290px);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 14px;
+      background: #fafcfa;
+    }
+    .totals-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      font-size: 12.5px;
+    }
+    .totals-row.grand {
+      margin-top: 6px;
+      padding-top: 8px;
+      border-top: 2px solid var(--ink);
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .signatures {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 36px;
+      margin-top: 44px;
+      padding-top: 16px;
+    }
+    .sig-line {
+      border-top: 1px solid var(--ink);
+      padding-top: 6px;
+      text-align: center;
+      font-size: 11.5px;
+      color: var(--muted);
+    }
+
+    .doc-footer {
+      margin-top: 24px;
+      padding-top: 12px;
+      border-top: 1px dashed var(--line);
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    /* Estilos específicos Ticket 80mm */
+    .ticket-center { text-align: center; }
+    .ticket-hr { border: 0; border-top: 1px dashed #333; margin: 8px 0; }
+    .ticket-item { display: flex; justify-content: space-between; gap: 6px; margin: 4px 0; }
+
+    @media print {
+      body { background: #fff; }
+      .doc-toolbar { display: none !important; }
+      .doc-sheet {
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+        box-shadow: none !important;
+      }
+      body.modo-ticket .doc-sheet {
+        width: 76mm !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="doc-toolbar">
+    <div class="doc-toolbar-group">
+      <a class="doc-btn" href="{{ volver_url }}">← Volver al pedido</a>
+      <span style="opacity:0.4">|</span>
+      <button type="button" id="btnFormatoA4" class="doc-btn active" onclick="cambiarFormato('a4')">📄 Hoja Comprobante (A4 / Carta)</button>
+      <button type="button" id="btnFormatoTicket" class="doc-btn" onclick="cambiarFormato('ticket')">🧾 Ticket Térmico (80mm)</button>
+    </div>
+    <div class="doc-toolbar-group">
+      <button type="button" class="doc-btn primary" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+    </div>
+  </header>
+
+  <main class="doc-sheet">
+    <!-- VISTA HOJA COMPROBANTE / ORDEN DE DESPACHO (A4) -->
+    <div class="solo-a4">
+      <div class="doc-header">
+        <div class="doc-brand">
+          <img src="{% static 'tienda/logo-minimarket.png' %}" alt="MiniMarket">
+          <div class="doc-meta">
+            <strong>{{ pedido.id_sucursal.nombre }}</strong><br>
+            {{ pedido.id_sucursal.direccion }}<br>
+            {% if pedido.id_sucursal.telefono %}Tel: {{ pedido.id_sucursal.telefono }}{% endif %}
+          </div>
+        </div>
+        <div class="doc-title-box">
+          <p class="doc-type">Comprobante y Orden de Entrega</p>
+          <h1 class="doc-code">{% if pedido.codigo_pedido %}{{ pedido.codigo_pedido }}{% else %}PED-#{{ pedido.id_pedido }}{% endif %}</h1>
+          <p class="doc-meta">Fecha de pedido: {{ pedido.fecha_creacion|date:"d/m/Y H:i" }}</p>
+          <p class="doc-meta">Impreso: {{ fecha_impresion|date:"d/m/Y H:i" }}</p>
+        </div>
+      </div>
+
+      <div class="info-grid">
+        <div class="info-box">
+          <h3>Datos del Cliente y Entrega</h3>
+          <p class="info-row"><strong>Cliente:</strong> {{ pedido.id_cliente.nombre_completo }}</p>
+          <p class="info-row"><strong>Correo:</strong> {{ pedido.id_cliente.email }}</p>
+          <p class="info-row"><strong>Teléfono:</strong> {{ pedido.id_cliente.telefono|default:"No registrado" }}</p>
+          <p class="info-row"><strong>Modalidad:</strong> {{ pedido.get_tipo_entrega_display }}</p>
+          {% if direccion %}
+            <p class="info-row"><strong>Dirección:</strong> {{ direccion.detalle_direccion }} ({{ direccion.id_municipio.nombre }})</p>
+            {% if direccion.punto_referencia %}
+              <p class="info-row"><strong>Referencia:</strong> {{ direccion.punto_referencia }}</p>
+            {% endif %}
+          {% endif %}
+        </div>
+
+        <div class="info-box">
+          <h3>Información Operativa y Pago</h3>
+          <p class="info-row"><strong>Estado del pedido:</strong> {{ pedido.get_estado_display }}</p>
+          <p class="info-row"><strong>Método de pago:</strong> {{ pedido.get_metodo_pago_display }}</p>
+          <p class="info-row"><strong>Estado de pago:</strong> {{ pedido.get_estado_pago_display }}</p>
+          <p class="info-row"><strong>Canal:</strong> {{ pedido.get_canal_display }}</p>
+          <p class="info-row">
+            <strong>Repartidor asignado:</strong>
+            {% if pedido.id_repartidor %}
+              {{ pedido.id_repartidor.id_repartidor.nombre_completo }}
+              {% if pedido.id_repartidor.placa_vehiculo %} ({{ pedido.id_repartidor.placa_vehiculo }}){% endif %}
+            {% else %}
+              Sin asignar / Retiro en tienda
+            {% endif %}
+          </p>
+        </div>
+      </div>
+
+      <table class="doc-table">
+        <thead>
+          <tr>
+            <th style="width: 42px;" class="center">#</th>
+            <th>Código</th>
+            <th>Descripción del Producto</th>
+            <th class="center">Cant.</th>
+            <th class="num">Precio Unit.</th>
+            <th class="num">Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for det in detalles %}
+            <tr>
+              <td class="center">{{ forloop.counter }}</td>
+              <td>{{ det.id_producto.codigo_barras|default:"—" }}</td>
+              <td><strong>{{ det.id_producto.nombre }}</strong></td>
+              <td class="center">{{ det.cantidad }}</td>
+              <td class="num">$ {{ det.precio_unitario|floatformat:2 }}</td>
+              <td class="num"><strong>$ {{ det.subtotal|floatformat:2 }}</strong></td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="center">No hay artículos registrados en este pedido.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <div class="totals-wrap">
+        <div class="totals-box">
+          <div class="totals-row">
+            <span>Subtotal productos ({{ total_unidades }} uds):</span>
+            <strong>$ {{ subtotal_productos|floatformat:2 }}</strong>
+          </div>
+          <div class="totals-row">
+            <span>Costo de envío:</span>
+            <strong>$ {{ pedido.costo_envio|floatformat:2 }}</strong>
+          </div>
+          <div class="totals-row grand">
+            <span>TOTAL:</span>
+            <span>$ {{ pedido.total|floatformat:2 }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="signatures">
+        <div class="sig-line">
+          <strong>Despachado / Entregado por</strong><br>
+          {{ pedido.id_sucursal.nombre }}
+        </div>
+        <div class="sig-line">
+          <strong>Recibido conforme por Cliente</strong><br>
+          {{ pedido.id_cliente.nombre_completo }}
+        </div>
+      </div>
+
+      <div class="doc-footer">
+        <span>MiniMarket · Sistema de Gestión Operativa</span>
+        <span>Documento generado por {{ generado_por }}</span>
+      </div>
+    </div>
+
+    <!-- VISTA TICKET TÉRMICO 80MM -->
+    <div class="solo-ticket">
+      <div class="ticket-center">
+        <strong style="font-size: 15px;">MINIMARKET</strong><br>
+        <span>{{ pedido.id_sucursal.nombre }}</span><br>
+        <small>{{ pedido.id_sucursal.direccion }}</small>
+      </div>
+      <hr class="ticket-hr">
+      <div>
+        <strong>PEDIDO: {% if pedido.codigo_pedido %}{{ pedido.codigo_pedido }}{% else %}#{{ pedido.id_pedido }}{% endif %}</strong><br>
+        Fecha: {{ pedido.fecha_creacion|date:"d/m/Y H:i" }}<br>
+        Cliente: {{ pedido.id_cliente.nombre_completo }}<br>
+        Tel: {{ pedido.id_cliente.telefono|default:"—" }}<br>
+        Entrega: {{ pedido.get_tipo_entrega_display }}<br>
+        {% if direccion %}Dir: {{ direccion.detalle_direccion }} ({{ direccion.id_municipio.nombre }})<br>{% endif %}
+        Pago: {{ pedido.get_metodo_pago_display }} ({{ pedido.get_estado_pago_display }})
+      </div>
+      <hr class="ticket-hr">
+      <div>
+        {% for det in detalles %}
+          <div class="ticket-item">
+            <span>{{ det.cantidad }}x {{ det.id_producto.nombre }}</span>
+            <strong>${{ det.subtotal|floatformat:2 }}</strong>
+          </div>
+        {% endfor %}
+      </div>
+      <hr class="ticket-hr">
+      <div class="ticket-item">
+        <span>Subtotal:</span>
+        <span>${{ subtotal_productos|floatformat:2 }}</span>
+      </div>
+      <div class="ticket-item">
+        <span>Envío:</span>
+        <span>${{ pedido.costo_envio|floatformat:2 }}</span>
+      </div>
+      <div class="ticket-item" style="font-size: 14px; font-weight: 800; margin-top: 4px;">
+        <span>TOTAL:</span>
+        <span>${{ pedido.total|floatformat:2 }}</span>
+      </div>
+      <hr class="ticket-hr">
+      <div class="ticket-center" style="margin-top: 8px;">
+        ¡Gracias por su compra!<br>
+        <small>Impreso {{ fecha_impresion|date:"d/m/Y H:i" }}</small>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    function cambiarFormato(modo) {
+      const esTicket = modo === 'ticket';
+      document.body.classList.toggle('modo-ticket', esTicket);
+      document.getElementById('btnFormatoA4').classList.toggle('active', !esTicket);
+      document.getElementById('btnFormatoTicket').classList.toggle('active', esTicket);
+    }
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('formato') === 'ticket') {
+      cambiarFormato('ticket');
+    }
+    if (params.get('print') === '1') {
+      window.addEventListener('load', function () {
+        setTimeout(function () { window.print(); }, 250);
+      });
+    }
+  </script>
+</body>
+</html>

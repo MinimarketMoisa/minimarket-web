@@ -65,9 +65,14 @@
                 <td><span class="badge {{ pedido.estado|lower }}">{{ pedido.get_estado_display }}</span></td>
                 <td class="font-semibold">$ {{ pedido.total|floatformat:2 }}</td>
                 <td class="text-right">
-                  <a class="button small secondary" href="{% url 'tienda:pedido-detalle' pedido.id_pedido %}">
-                    {% if pedido.estado == "EN_RUTA" %}Seguir GPS{% else %}Gestionar{% endif %}
-                  </a>
+                  <div class="inline-flex items-center gap-1.5">
+                    <a class="button small secondary" href="{% url 'tienda:pedido-documento' pedido.id_pedido %}" title="Generar comprobante / ticket para imprimir">
+                      🖨️
+                    </a>
+                    <a class="button small secondary" href="{% url 'tienda:pedido-detalle' pedido.id_pedido %}">
+                      {% if pedido.estado == "EN_RUTA" %}Seguir GPS{% else %}Gestionar{% endif %}
+                    </a>
+                  </div>
                 </td>
               </tr>
             {% endfor %}

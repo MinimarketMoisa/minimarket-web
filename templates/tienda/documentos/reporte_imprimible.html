@@ -1,0 +1,295 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Informe de Métricas · {{ mes_nombre }} | MiniMarket</title>
+  <style>
+    :root {
+      --ink: #172b25;
+      --muted: #5a6b65;
+      --line: #d5e0db;
+      --green: #707d0c;
+      --orange: #f67300;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #eef3f0;
+      color: var(--ink);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 12.5px;
+      line-height: 1.45;
+    }
+    .doc-toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 24px;
+      background: #172b25;
+      color: #fff;
+    }
+    .doc-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 7px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+      font: inherit;
+      font-size: 12.5px;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .doc-btn.primary { background: var(--orange); border-color: var(--orange); font-weight: 700; }
+
+    .doc-sheet {
+      width: min(100% - 32px, 900px);
+      margin: 24px auto 48px;
+      padding: 34px 38px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(23, 43, 37, 0.06);
+    }
+    .doc-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 20px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid var(--ink);
+    }
+    .doc-brand img { height: 42px; width: auto; display: block; margin-bottom: 6px; }
+    .doc-type {
+      margin: 0;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--green);
+    }
+    .doc-title { margin: 4px 0; font-size: 21px; font-weight: 800; }
+    .doc-meta { margin: 2px 0; color: var(--muted); font-size: 12px; }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin: 18px 0;
+    }
+    .kpi-card {
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fafcfa;
+    }
+    .kpi-card span { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; font-weight: 700; }
+    .kpi-card strong { display: block; margin-top: 4px; font-size: 20px; font-weight: 800; color: var(--ink); }
+    .kpi-card small { color: var(--muted); font-size: 11px; }
+
+    h2.sec-title {
+      margin: 22px 0 8px;
+      font-size: 13px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--green);
+    }
+    .two-col {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px;
+    }
+    table.doc-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    table.doc-table th {
+      padding: 8px 10px;
+      background: #f4f8f5;
+      border-top: 1px solid var(--ink);
+      border-bottom: 1px solid var(--ink);
+      font-size: 10.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      text-align: left;
+    }
+    table.doc-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #e6eeea;
+      font-size: 12px;
+    }
+    table.doc-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+    table.doc-table .center { text-align: center; }
+
+    .signatures {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 40px;
+      margin-top: 48px;
+    }
+    .sig-line {
+      border-top: 1px solid var(--ink);
+      padding-top: 6px;
+      text-align: center;
+      font-size: 11.5px;
+      color: var(--muted);
+    }
+    @media print {
+      body { background: #fff; }
+      .doc-toolbar { display: none !important; }
+      .doc-sheet {
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+        box-shadow: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="doc-toolbar">
+    <a class="doc-btn" href="{{ volver_url }}">← Volver a métricas</a>
+    <button type="button" class="doc-btn primary" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+  </header>
+
+  <main class="doc-sheet">
+    <div class="doc-header">
+      <div class="doc-brand">
+        <img src="{% static 'tienda/logo-minimarket.png' %}" alt="MiniMarket">
+        <p class="doc-meta"><strong>Alcance:</strong> {{ ambito_nombre }}</p>
+        <p class="doc-meta"><strong>Período evaluado:</strong> {{ mes_nombre }}</p>
+      </div>
+      <div style="text-align: right;">
+        <p class="doc-type">INTELIGENCIA DE NEGOCIO</p>
+        <h1 class="doc-title">Informe Ejecutivo de Ventas y Operaciones</h1>
+        <p class="doc-meta">Fecha de generación: {{ fecha_impresion|date:"d/m/Y H:i" }}</p>
+        <p class="doc-meta">Generado por: {{ generado_por }}</p>
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <span>Ventas Confirmadas</span>
+        <strong>$ {{ total_ventas|floatformat:2 }}</strong>
+        <small>{{ pedidos_confirmados_count }} confirmados ({{ pedidos_entregados_count }} entregados)</small>
+      </div>
+      <div class="kpi-card">
+        <span>Efectividad Operativa</span>
+        <strong>{{ tasa_efectividad }}%</strong>
+        <small>{{ pedidos_validos_count }} válidos de {{ total_pedidos_periodo }} totales</small>
+      </div>
+      <div class="kpi-card">
+        <span>Ticket Promedio</span>
+        <strong>$ {{ ticket_promedio|floatformat:2 }}</strong>
+        <small>Promedio por orden válida</small>
+      </div>
+      <div class="kpi-card">
+        <span>Estado de Órdenes</span>
+        <strong>{{ total_pedidos_periodo }}</strong>
+        <small>{{ pedidos_en_proceso_count }} en curso · {{ pedidos_cancelados_count }} cancelados</small>
+      </div>
+    </div>
+
+    <h2 class="sec-title">Desglose por Método de Pago</h2>
+    <table class="doc-table">
+      <thead>
+        <tr>
+          <th>Método de Pago</th>
+          <th class="center">Órdenes Válidas</th>
+          <th class="num">Monto Recaudado</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Tarjeta</strong></td>
+          <td class="center">{{ wompi_count }}</td>
+          <td class="num"><strong>$ {{ ventas_wompi|floatformat:2 }}</strong></td>
+        </tr>
+        <tr>
+          <td><strong>Transferencia</strong></td>
+          <td class="center">{{ transferencia_count }}</td>
+          <td class="num"><strong>$ {{ ventas_transferencia|floatformat:2 }}</strong></td>
+        </tr>
+        <tr>
+          <td><strong>Contra entrega</strong></td>
+          <td class="center">{{ efectivo_count }}</td>
+          <td class="num"><strong>$ {{ ventas_efectivo|floatformat:2 }}</strong></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="two-col">
+      <div>
+        <h2 class="sec-title">Top Productos Más Demandados</h2>
+        <table class="doc-table">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th class="center">Unidades</th>
+              <th class="num">Venta Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for prod in top_productos %}
+              <tr>
+                <td><strong>{{ prod.nombre }}</strong></td>
+                <td class="center">{{ prod.unidades }}</td>
+                <td class="num">$ {{ prod.total_recaudado|floatformat:2 }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="3" class="center">Sin ventas registradas en el período.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div>
+        <h2 class="sec-title">Rendimiento de Repartidores</h2>
+        <table class="doc-table">
+          <thead>
+            <tr>
+              <th>Repartidor</th>
+              <th class="center">Entregas / Asignaciones</th>
+              <th class="center">Estado Actual</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for rep in rendimiento_repartidores %}
+              <tr>
+                <td><strong>{{ rep.nombre }}</strong></td>
+                <td class="center">{{ rep.entregas }}</td>
+                <td class="center">{{ rep.estado }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="3" class="center">Sin entregas con repartidor en el período.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="signatures">
+      <div class="sig-line">
+        <strong>Elaborado por</strong><br>
+        {{ generado_por }}
+      </div>
+      <div class="sig-line">
+        <strong>Aprobado por</strong><br>
+        Gerencia General MiniMarket
+      </div>
+    </div>
+  </main>
+</body>
+</html>
