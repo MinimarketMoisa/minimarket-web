@@ -12,6 +12,11 @@ urlpatterns = [
     path("administracion/", views.admin_panel, name="admin-panel"),
     path("administracion/pedidos/", views.pedidos_admin, name="admin-pedidos"),
     path(
+        "pedidos/<int:id_pedido>/telemetria/",
+        views.pedido_telemetria_json,
+        name="pedido-telemetria",
+    ),
+    path(
         "administracion/pedidos/<int:id_pedido>/",
         views.pedido_admin_detalle,
         name="admin-pedido-detalle",

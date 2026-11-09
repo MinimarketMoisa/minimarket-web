@@ -38,11 +38,13 @@ environ.Env.read_env(BASE_DIR / ".env")
 
 # ── Seguridad ─────────────────────────────────────────────────────────────────
 SECRET_KEY = env("SECRET_KEY", default="django-insecure-cambia-esto-en-produccion")
+JWT_SECRET = env("JWT_SECRET", default="")
 DEBUG       = env("DEBUG")
 ALLOWED_HOSTS = env("ALLOWED_HOSTS")
 CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS")
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 
 
 # ── Aplicaciones ──────────────────────────────────────────────────────────────

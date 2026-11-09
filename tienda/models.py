@@ -324,6 +324,7 @@ class Pedido(models.Model):
     canal = models.CharField(max_length=10, choices=CANAL_CHOICES)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default="PENDIENTE")
+    estado_repartidor = models.CharField(max_length=20, null=True, blank=True)
     tipo_entrega = models.CharField(max_length=20, choices=TIPO_ENTREGA_CHOICES)
     metodo_pago = models.CharField(max_length=20, choices=METODO_PAGO_CHOICES)
     estado_pago = models.CharField(max_length=20, choices=ESTADO_PAGO_CHOICES, default="PENDIENTE")

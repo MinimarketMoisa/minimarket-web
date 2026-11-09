@@ -23,7 +23,7 @@ from django.db.models import (
     Value,
 )
 from django.db.models.functions import Coalesce, TruncDate
-from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -193,45 +193,99 @@ def _resumen_ubicaciones_html(producto: Producto, sucursal_id_filtro: int | None
     )
 
 
-def _contexto_seguimiento_pedido(request: HttpRequest, pedido: Pedido, direccion) -> dict:
+def _serializar_seguimiento_pedido(pedido: Pedido, direccion) -> dict:
     sucursal = pedido.id_sucursal
     perfil_rep = pedido.id_repartidor
     usuario_rep = getattr(perfil_rep, "id_repartidor", None) if perfil_rep else None
 
-    estado_inicial = {
+    # Si el repartidor ya aceptó el pedido o está transmitiendo pulso GPS activo para este pedido,
+    # reflejar automáticamente el estado EN_RUTA en la base de datos y en el portal web.
+    if perfil_rep is not None and pedido.estado in {"PENDIENTE", "PREPARADO"}:
+        pulso_activo = (
+            perfil_rep.ultima_actualizacion is not None
+            and pedido.fecha_creacion is not None
+            and perfil_rep.ultima_actualizacion >= pedido.fecha_creacion
+        )
+        if getattr(pedido, "estado_repartidor", None) == "ACEPTADO" or pulso_activo:
+            pedido.estado = "EN_RUTA"
+            pedido.estado_repartidor = "ACEPTADO"
+            Pedido.objects.filter(pk=pedido.pk).update(
+                estado="EN_RUTA",
+                estado_repartidor="ACEPTADO",
+            )
+
+    suc_lat = float(sucursal.latitud) if sucursal and sucursal.latitud is not None else 13.4834
+    suc_lng = float(sucursal.longitud) if sucursal and sucursal.longitud is not None else -88.1833
+
+    dir_lat = (
+        float(direccion.latitud)
+        if direccion and direccion.latitud is not None
+        else round(suc_lat + 0.0055, 6)
+    )
+    dir_lng = (
+        float(direccion.longitud)
+        if direccion and direccion.longitud is not None
+        else round(suc_lng + 0.0045, 6)
+    )
+
+    rep_lat = (
+        float(perfil_rep.latitud_actual)
+        if perfil_rep and perfil_rep.latitud_actual is not None
+        else suc_lat
+    )
+    rep_lng = (
+        float(perfil_rep.longitud_actual)
+        if perfil_rep and perfil_rep.longitud_actual is not None
+        else suc_lng
+    )
+
+    datos_direccion = (
+        {
+            "id_direccion": direccion.id_direccion,
+            "detalle_direccion": direccion.detalle_direccion,
+            "punto_referencia": direccion.punto_referencia,
+            "latitud": dir_lat,
+            "longitud": dir_lng,
+        }
+        if direccion
+        else {
+            "id_direccion": None,
+            "detalle_direccion": "Dirección de entrega a domicilio",
+            "punto_referencia": None,
+            "latitud": dir_lat,
+            "longitud": dir_lng,
+        }
+    )
+
+    return {
         "id_pedido": pedido.id_pedido,
         "codigo_pedido": pedido.codigo_pedido,
         "estado": pedido.estado,
+        "estado_display": pedido.get_estado_display(),
+        "estado_pago": pedido.estado_pago,
+        "estado_pago_display": pedido.get_estado_pago_display(),
+        "metodo_pago": pedido.metodo_pago,
+        "metodo_pago_display": pedido.get_metodo_pago_display(),
         "tipo_entrega": pedido.tipo_entrega,
         "sucursal": {
             "id_sucursal": sucursal.id_sucursal,
             "nombre": sucursal.nombre,
             "direccion": sucursal.direccion,
-            "latitud": float(sucursal.latitud) if sucursal.latitud is not None else 13.4834,
-            "longitud": float(sucursal.longitud) if sucursal.longitud is not None else -88.1833,
+            "latitud": suc_lat,
+            "longitud": suc_lng,
         }
         if sucursal
         else None,
-        "direccion_entrega": {
-            "id_direccion": direccion.id_direccion,
-            "detalle_direccion": direccion.detalle_direccion,
-            "punto_referencia": direccion.punto_referencia,
-            "latitud": float(direccion.latitud) if direccion.latitud is not None else None,
-            "longitud": float(direccion.longitud) if direccion.longitud is not None else None,
-        }
-        if direccion
-        else None,
+        "direccion_entrega": datos_direccion,
+        "destino": datos_direccion,
         "repartidor": {
             "id_repartidor": perfil_rep.id_repartidor_id,
             "nombre_completo": usuario_rep.nombre_completo if usuario_rep else "Repartidor",
+            "nombre": usuario_rep.nombre_completo if usuario_rep else "Repartidor",
             "telefono": usuario_rep.telefono if usuario_rep else None,
             "estado_operativo": perfil_rep.estado_operativo,
-            "latitud": float(perfil_rep.latitud_actual)
-            if perfil_rep.latitud_actual is not None
-            else (float(sucursal.latitud) if sucursal and sucursal.latitud is not None else None),
-            "longitud": float(perfil_rep.longitud_actual)
-            if perfil_rep.longitud_actual is not None
-            else (float(sucursal.longitud) if sucursal and sucursal.longitud is not None else None),
+            "latitud": rep_lat,
+            "longitud": rep_lng,
             "ultima_actualizacion": perfil_rep.ultima_actualizacion.isoformat()
             if perfil_rep.ultima_actualizacion is not None
             else None,
@@ -240,12 +294,38 @@ def _contexto_seguimiento_pedido(request: HttpRequest, pedido: Pedido, direccion
         else None,
     }
 
+
+def _contexto_seguimiento_pedido(request: HttpRequest, pedido: Pedido, direccion) -> dict:
+    estado_inicial = _serializar_seguimiento_pedido(pedido, direccion)
     return {
         "fastapi_base_url": getattr(settings, "FASTAPI_BASE_URL", "https://minimarket-api.duckdns.org"),
         "fastapi_ws_url": getattr(settings, "FASTAPI_WS_URL", "wss://minimarket-api.duckdns.org"),
         "jwt_seguimiento": generar_jwt_seguimiento(request.user),
+        "telemetria_url": reverse("tienda:pedido-telemetria", args=[pedido.id_pedido]),
         "seguimiento_inicial_json": json.dumps(estado_inicial),
     }
+
+
+@login_required(login_url="tienda:empleado-login")
+def pedido_telemetria_json(request: HttpRequest, id_pedido: int) -> HttpResponse:
+    if not (es_admin(request.user) or es_empleado(request.user)):
+        return HttpResponseForbidden("Sin permisos.")
+
+    filtros = {"id_pedido": id_pedido}
+    if not es_admin(request.user):
+        sucursal_emp = obtener_sucursal_empleado(request.user)
+        if sucursal_emp is None:
+            return HttpResponseForbidden("Sin sucursal asignada.")
+        filtros["id_sucursal"] = sucursal_emp
+
+    pedido = get_object_or_404(
+        Pedido.objects.select_related(
+            "id_cliente", "id_sucursal", "id_repartidor__id_repartidor"
+        ),
+        **filtros,
+    )
+    direccion = direccion_pedido(pedido)
+    return JsonResponse(_serializar_seguimiento_pedido(pedido, direccion))
 
 
 def _productos_con_inventario(sucursal):
@@ -624,12 +704,16 @@ def pedido_admin_detalle(request: HttpRequest, id_pedido: int) -> HttpResponse:
                     if estado_anterior != "CANCELADO":
                         cancelar_pedido(pedido_lock, guardar_pedido=False)
                     pedido_lock.estado_pago = nuevo_estado_pago
-                    pedido_lock.save(update_fields=["estado", "estado_pago", "id_repartidor"])
+                    pedido_lock.save(update_fields=["estado", "estado_pago", "id_repartidor", "estado_repartidor"])
                 else:
                     actualizar_repartidor_pedido(pedido_lock, nuevo_repartidor)
                     pedido_lock.estado = nuevo_estado
                     pedido_lock.estado_pago = nuevo_estado_pago
-                    pedido_lock.save(update_fields=["estado", "estado_pago", "id_repartidor"])
+                    if nuevo_estado == "EN_RUTA" and pedido_lock.id_repartidor_id:
+                        pedido_lock.estado_repartidor = "ACEPTADO"
+                    elif nuevo_estado == "ENTREGADO":
+                        pedido_lock.estado_repartidor = None
+                    pedido_lock.save(update_fields=["estado", "estado_pago", "id_repartidor", "estado_repartidor"])
                     if nuevo_estado == "ENTREGADO" and pedido_lock.id_repartidor_id:
                         liberar_repartidor_si_sin_pedidos(pedido_lock.id_repartidor_id, pedido_lock.pk)
             except ValueError as error:
@@ -1375,7 +1459,7 @@ def accion_pedido(request: HttpRequest, id_pedido: int) -> HttpResponse:
             else:
                 try:
                     perfil = actualizar_repartidor_pedido(pedido, int(nuevo_id))
-                    pedido.save(update_fields=["id_repartidor"])
+                    pedido.save(update_fields=["id_repartidor", "estado_repartidor"])
                     messages.success(
                         request,
                         f"El repartidor {perfil.id_repartidor.nombre_completo} fue asignado.",

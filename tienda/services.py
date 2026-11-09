@@ -96,8 +96,9 @@ def generar_jwt_seguimiento(usuario: Usuario, vigencia_minutos: int = 60) -> str
     header_b64 = _b64url(json.dumps(header, separators=(",", ":")).encode("utf-8"))
     payload_b64 = _b64url(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
     mensaje = f"{header_b64}.{payload_b64}".encode("ascii")
+    clave_jwt = getattr(settings, "JWT_SECRET", "") or settings.SECRET_KEY
     firma = hmac.new(
-        settings.SECRET_KEY.encode("utf-8"),
+        clave_jwt.encode("utf-8"),
         mensaje,
         hashlib.sha256,
     ).digest()
@@ -188,6 +189,7 @@ def actualizar_repartidor_pedido(pedido: Pedido, nuevo_perfil) -> PerfilRepartid
 
     if nuevo_perfil is None:
         pedido.id_repartidor = None
+        pedido.estado_repartidor = None
         if repartidor_anterior_id:
             liberar_repartidor_si_sin_pedidos(repartidor_anterior_id, pedido.pk)
         return None
@@ -222,6 +224,8 @@ def actualizar_repartidor_pedido(pedido: Pedido, nuevo_perfil) -> PerfilRepartid
     perfil.estado_operativo = "PENDIENTE"
     perfil.save(update_fields=["estado_operativo"])
     pedido.id_repartidor = perfil
+    if perfil.pk != repartidor_anterior_id or not getattr(pedido, "estado_repartidor", None):
+        pedido.estado_repartidor = "ASIGNADO"
 
     if repartidor_anterior_id and repartidor_anterior_id != perfil.pk:
         liberar_repartidor_si_sin_pedidos(repartidor_anterior_id, pedido.pk)
@@ -256,11 +260,12 @@ def cancelar_pedido(pedido: Pedido, *, guardar_pedido: bool = True) -> None:
     if pedido.id_repartidor_id:
         repartidor_id = pedido.id_repartidor_id
         pedido.id_repartidor = None
+        pedido.estado_repartidor = None
         liberar_repartidor_si_sin_pedidos(repartidor_id, pedido.pk)
 
     pedido.estado = "CANCELADO"
     if guardar_pedido:
-        pedido.save(update_fields=["estado", "id_repartidor"])
+        pedido.save(update_fields=["estado", "id_repartidor", "estado_repartidor"])
 
 
 # ─── Soporte Técnico para Reportes (Denuncia) ────────────────────────────────

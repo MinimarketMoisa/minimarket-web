@@ -1,5 +1,5 @@
 /**
- * Rastreo GPS en Tiempo Real (Estándar 25s + WebSocket + Leaflet OpenStreetMap)
+ * Rastreo GPS en Tiempo Real (Estándar 25s + WebSocket + Sincronización BD + Leaflet)
  * Portal Web Administrativo y de Sucursales — MiniMarket
  */
 (function () {
@@ -29,9 +29,20 @@
   let polylineRuta = null;
   let animFrame = null;
   let ws = null;
+  let wsConectado = false;
   let pingTimer = null;
   let reconnectTimer = null;
+  let pollTimer = null;
   let estadoActual = cfg.estadoInicial || {};
+  let ultimaPosicionConocida = null;
+
+  const ETIQUETAS_ESTADO = {
+    PENDIENTE: "Pendiente",
+    PREPARADO: "Preparado",
+    EN_RUTA: "En ruta",
+    ENTREGADO: "Entregado",
+    CANCELADO: "Cancelado",
+  };
 
   function crearIconoPin(tipo, emoji, rumboGrados) {
     const rotacion = Number.isFinite(Number(rumboGrados)) ? Number(rumboGrados) : 0;
@@ -66,6 +77,43 @@
       });
     } catch (_) {
       return String(isoStr);
+    }
+  }
+
+  function calcularRumboGrados(lat1, lon1, lat2, lon2) {
+    const toRad = (d) => (d * Math.PI) / 180;
+    const toDeg = (r) => (r * 180) / Math.PI;
+    const dLon = toRad(lon2 - lon1);
+    const y = Math.sin(dLon) * Math.cos(toRad(lat2));
+    const x =
+      Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+      Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
+    return (toDeg(Math.atan2(y, x)) + 360) % 360;
+  }
+
+  function calcularDistanciaMetros(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const toRad = (d) => (d * Math.PI) / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat1)) *
+        Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  function actualizarEstadoPedidoUI(nuevoEstado, etiquetaDisplay) {
+    if (!nuevoEstado) return;
+    const codigo = String(nuevoEstado).toUpperCase();
+    cfg.estadoPedido = codigo;
+    if (elEstadoPedidoBadge) {
+      elEstadoPedidoBadge.textContent =
+        etiquetaDisplay || ETIQUETAS_ESTADO[codigo] || codigo;
+      elEstadoPedidoBadge.className =
+        "badge " + codigo.toLowerCase() + " text-sm px-3.5 py-1.5";
     }
   }
 
@@ -106,7 +154,7 @@
         polylineRuta = L.polyline(puntos, {
           color: "#f67300",
           weight: 4,
-          opacity: 0.8,
+          opacity: 0.85,
           dashArray: "8, 8",
         }).addTo(map);
       } else {
@@ -122,7 +170,7 @@
     if (markerDestino) puntos.push(markerDestino.getLatLng());
     if (markerRepartidor) puntos.push(markerRepartidor.getLatLng());
     if (puntos.length >= 2) {
-      map.fitBounds(L.latLngBounds(puntos), { padding: [42, 42], maxZoom: 16 });
+      map.fitBounds(L.latLngBounds(puntos), { padding: [46, 46], maxZoom: 16 });
     } else if (puntos.length === 1) {
       map.setView(puntos[0], 15);
     }
@@ -135,10 +183,17 @@
         zoom: 14,
         scrollWheelZoom: false,
       });
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      }).addTo(map);
+      // Servidor de teselas CartoDB Voyager (basado en OpenStreetMap, sin bloqueo HTTP 403)
+      L.tileLayer(
+        "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+        {
+          subdomains: "abcd",
+          maxZoom: 19,
+          referrerPolicy: "strict-origin-when-cross-origin",
+          attribution:
+            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        }
+      ).addTo(map);
       setTimeout(function () {
         map.invalidateSize();
       }, 180);
@@ -149,6 +204,20 @@
   function aplicarEstadoSeguimiento(datos, ajustarVista) {
     if (!datos || !map) return;
     estadoActual = Object.assign({}, estadoActual, datos);
+
+    if (datos.estado) {
+      actualizarEstadoPedidoUI(datos.estado, datos.estado_display);
+    }
+    if (datos.estado_pago && elEstadoPagoBadge) {
+      elEstadoPagoBadge.textContent =
+        datos.estado_pago_display ||
+        (datos.estado_pago === "PAGADO" ? "Pagado" : "Pendiente");
+      elEstadoPagoBadge.className =
+        "badge " + (datos.estado_pago === "PAGADO" ? "aprobado" : "pendiente");
+    }
+    if (datos.metodo_pago_display && elMetodoPagoTexto) {
+      elMetodoPagoTexto.textContent = datos.metodo_pago_display;
+    }
 
     const suc = datos.sucursal || estadoActual.sucursal;
     if (suc && suc.latitud != null && suc.longitud != null) {
@@ -166,7 +235,11 @@
       }
     }
 
-    const dir = datos.direccion_entrega || estadoActual.direccion_entrega;
+    const dir =
+      datos.direccion_entrega ||
+      datos.destino ||
+      estadoActual.direccion_entrega ||
+      estadoActual.destino;
     if (dir && dir.latitud != null && dir.longitud != null) {
       const posDir = [Number(dir.latitud), Number(dir.longitud)];
       if (!markerDestino) {
@@ -186,12 +259,23 @@
 
     const rep = datos.repartidor || estadoActual.repartidor;
     if (rep) {
-      if (elRepartidorNombre && rep.nombre_completo) {
+      const nombreRep = rep.nombre_completo || rep.nombre;
+      if (elRepartidorNombre && nombreRep) {
         elRepartidorNombre.textContent =
-          rep.nombre_completo + (rep.telefono ? " · " + rep.telefono : "");
+          nombreRep + (rep.telefono ? " · " + rep.telefono : "");
       }
-      const lat = rep.latitud != null ? Number(rep.latitud) : suc && suc.latitud != null ? Number(suc.latitud) : null;
-      const lng = rep.longitud != null ? Number(rep.longitud) : suc && suc.longitud != null ? Number(suc.longitud) : null;
+      const lat =
+        rep.latitud != null
+          ? Number(rep.latitud)
+          : suc && suc.latitud != null
+          ? Number(suc.latitud)
+          : null;
+      const lng =
+        rep.longitud != null
+          ? Number(rep.longitud)
+          : suc && suc.longitud != null
+          ? Number(suc.longitud)
+          : null;
       if (lat != null && lng != null) {
         actualizarPosicionRepartidor({
           latitud: lat,
@@ -211,40 +295,114 @@
 
   function actualizarPosicionRepartidor(telemetria) {
     if (!map || telemetria.latitud == null || telemetria.longitud == null) return;
-    const pos = [Number(telemetria.latitud), Number(telemetria.longitud)];
-    const rumbo = telemetria.rumbo != null ? Number(telemetria.rumbo) : 0;
+    const lat = Number(telemetria.latitud);
+    const lng = Number(telemetria.longitud);
+    const pos = [lat, lng];
+    const ahoraMs = Date.now();
+
+    let rumbo = telemetria.rumbo != null ? Number(telemetria.rumbo) : null;
+    let velocidadKmh = null;
+
+    if (telemetria.velocidad != null && !isNaN(Number(telemetria.velocidad))) {
+      const v = Number(telemetria.velocidad);
+      velocidadKmh = v <= 35 ? v * 3.6 : v;
+    }
+
+    if (ultimaPosicionConocida) {
+      const distM = calcularDistanciaMetros(
+        ultimaPosicionConocida.lat,
+        ultimaPosicionConocida.lng,
+        lat,
+        lng
+      );
+      if (distM > 1.5) {
+        if (rumbo == null) {
+          rumbo = calcularRumboGrados(
+            ultimaPosicionConocida.lat,
+            ultimaPosicionConocida.lng,
+            lat,
+            lng
+          );
+        }
+        if (velocidadKmh == null) {
+          const dtSeg = Math.max(1, (ahoraMs - ultimaPosicionConocida.ts) / 1000);
+          velocidadKmh = Math.min(95, (distM / dtSeg) * 3.6);
+        }
+      }
+    }
+
+    if (
+      !ultimaPosicionConocida ||
+      Math.abs(ultimaPosicionConocida.lat - lat) > 1e-7 ||
+      Math.abs(ultimaPosicionConocida.lng - lng) > 1e-7
+    ) {
+      ultimaPosicionConocida = {
+        lat: lat,
+        lng: lng,
+        ts: ahoraMs,
+        rumbo: rumbo != null ? rumbo : ultimaPosicionConocida ? ultimaPosicionConocida.rumbo : 0,
+      };
+    } else if (rumbo == null && ultimaPosicionConocida) {
+      rumbo = ultimaPosicionConocida.rumbo;
+    }
+
+    const rumboFinal = rumbo != null && !isNaN(rumbo) ? rumbo : 0;
 
     if (!markerRepartidor) {
       markerRepartidor = L.marker(pos, {
-        icon: crearIconoPin("moto", "🛵", rumbo),
+        icon: crearIconoPin("moto", "🛵", rumboFinal),
         zIndexOffset: 500,
       })
         .addTo(map)
         .bindPopup("<strong>Repartidor en ruta</strong>");
     } else {
-      markerRepartidor.setIcon(crearIconoPin("moto", "🛵", rumbo));
+      markerRepartidor.setIcon(crearIconoPin("moto", "🛵", rumboFinal));
       animarMarcador(markerRepartidor, pos, 850);
     }
 
     if (elVelocidad) {
-      if (telemetria.velocidad != null && !isNaN(Number(telemetria.velocidad))) {
-        const v = Number(telemetria.velocidad);
-        const kmh = v <= 35 ? (v * 3.6).toFixed(1) : v.toFixed(1);
-        elVelocidad.textContent = `${kmh} km/h`;
+      if (velocidadKmh != null && !isNaN(velocidadKmh) && velocidadKmh > 0.2) {
+        elVelocidad.textContent = `${velocidadKmh.toFixed(1)} km/h`;
       } else {
-        elVelocidad.textContent = "En movimiento";
+        const est = String(cfg.estadoPedido || "").toUpperCase();
+        elVelocidad.textContent = est === "EN_RUTA" ? "En ruta activa" : "En posición";
       }
     }
     if (elRumbo) {
       elRumbo.textContent =
-        telemetria.rumbo != null && !isNaN(Number(telemetria.rumbo))
-          ? `${Math.round(Number(telemetria.rumbo))}°`
-          : "—";
+        rumbo != null && !isNaN(Number(rumbo)) && Number(rumbo) > 0
+          ? `${Math.round(Number(rumbo))}°`
+          : "En ruta";
     }
     if (elActualizacion && telemetria.ultima_actualizacion) {
       elActualizacion.textContent = formatearHora(telemetria.ultima_actualizacion);
     }
     actualizarLineaRuta();
+  }
+
+  function consultarTelemetriaLocal() {
+    const url = cfg.telemetriaUrl || `/pedidos/${cfg.idPedido}/telemetria/`;
+    fetch(url, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      })
+      .then(function (datos) {
+        aplicarEstadoSeguimiento(datos, false);
+        if (!wsConectado) {
+          const estadoPed = String(cfg.estadoPedido || "").toUpperCase();
+          if (estadoPed === "ENTREGADO" || estadoPed === "CANCELADO") {
+            actualizarBadgeWs("Entrega finalizada", "");
+          } else {
+            actualizarBadgeWs("● En vivo (GPS activo)", "aprobado");
+          }
+        }
+      })
+      .catch(function () {});
   }
 
   function cargarRestSeguimiento() {
@@ -264,14 +422,12 @@
       .then(function (datos) {
         aplicarEstadoSeguimiento(datos, true);
       })
-      .catch(function () {
-        // El mapa ya está renderizado con los datos iniciales de PostgreSQL
-      });
+      .catch(function () {});
   }
 
   function conectarWebSocket() {
     if (!cfg.wsBase || !cfg.jwtToken) {
-      actualizarBadgeWs("Mapa activo (sin token WS)", "pendiente");
+      consultarTelemetriaLocal();
       return;
     }
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
@@ -283,15 +439,15 @@
       cfg.jwtToken
     )}`;
 
-    actualizarBadgeWs("Conectando GPS...", "pendiente");
     try {
       ws = new WebSocket(wsUrl);
     } catch (_) {
-      actualizarBadgeWs("Modo local (REST)", "pendiente");
+      consultarTelemetriaLocal();
       return;
     }
 
     ws.onopen = function () {
+      wsConectado = true;
       actualizarBadgeWs("● En vivo (25s GPS)", "aprobado");
       if (pingTimer) clearInterval(pingTimer);
       pingTimer = setInterval(function () {
@@ -316,11 +472,7 @@
             ultima_actualizacion: msg.ultima_actualizacion || new Date().toISOString(),
           });
         } else if (msg.evento === "estado_pedido_actualizado") {
-          if (elEstadoPedidoBadge && msg.estado) {
-            elEstadoPedidoBadge.textContent = msg.estado;
-            elEstadoPedidoBadge.className =
-              "badge " + String(msg.estado).toLowerCase() + " text-sm px-3.5 py-1.5";
-          }
+          actualizarEstadoPedidoUI(msg.estado);
         } else if (msg.evento === "pago_confirmado") {
           if (elEstadoPagoBadge) {
             elEstadoPagoBadge.textContent = "Pagado";
@@ -337,19 +489,21 @@
     };
 
     ws.onclose = function () {
+      wsConectado = false;
       if (pingTimer) clearInterval(pingTimer);
-      const estadoPed = (cfg.estadoPedido || "").toUpperCase();
+      const estadoPed = String(cfg.estadoPedido || "").toUpperCase();
       if (estadoPed !== "ENTREGADO" && estadoPed !== "CANCELADO") {
-        actualizarBadgeWs("Reconectando señal...", "pendiente");
+        consultarTelemetriaLocal();
         if (reconnectTimer) clearTimeout(reconnectTimer);
-        reconnectTimer = setTimeout(conectarWebSocket, 5000);
+        reconnectTimer = setTimeout(conectarWebSocket, 10000);
       } else {
         actualizarBadgeWs("Entrega finalizada", "");
       }
     };
 
     ws.onerror = function () {
-      actualizarBadgeWs("Mapa activo (sin señal WS)", "pendiente");
+      wsConectado = false;
+      consultarTelemetriaLocal();
     };
   }
 
@@ -360,6 +514,17 @@
   }
 
   inicializarMapa(cfg.estadoInicial || {});
+  consultarTelemetriaLocal();
   cargarRestSeguimiento();
   conectarWebSocket();
+
+  // Sondeo continuo contra PostgreSQL cada 5 segundos como respaldo en tiempo real
+  pollTimer = setInterval(function () {
+    const estadoPed = String(cfg.estadoPedido || "").toUpperCase();
+    if (estadoPed === "ENTREGADO" || estadoPed === "CANCELADO") {
+      clearInterval(pollTimer);
+      return;
+    }
+    consultarTelemetriaLocal();
+  }, 5000);
 })();

@@ -170,10 +170,11 @@
         apiBase: "{{ fastapi_base_url|escapejs }}",
         wsBase: "{{ fastapi_ws_url|escapejs }}",
         jwtToken: "{{ jwt_seguimiento|escapejs }}",
+        telemetriaUrl: "{{ telemetria_url|escapejs }}",
         estadoInicial: {{ seguimiento_inicial_json|safe }}
       };
     </script>
-    <script src="{% static 'tienda/tracking.js' %}?v=20261108"></script>
+    <script src="{% static 'tienda/tracking.js' %}?v=20261109"></script>
   {% endif %}
 
   <section class="panel actions-panel">
