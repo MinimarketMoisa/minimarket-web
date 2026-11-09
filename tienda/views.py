@@ -86,7 +86,6 @@ MESES_ES = (
 
 METODOS_PAGO_FILTRO_CHOICES = (
     ("TARJETA", "Tarjeta"),
-    ("TRANSFERENCIA", "Transferencia"),
     ("CONTRA_ENTREGA", "Contra entrega"),
 )
 
@@ -198,9 +197,8 @@ def _serializar_seguimiento_pedido(pedido: Pedido, direccion) -> dict:
     perfil_rep = pedido.id_repartidor
     usuario_rep = getattr(perfil_rep, "id_repartidor", None) if perfil_rep else None
 
-    # Si el repartidor ya aceptó el pedido o está transmitiendo pulso GPS activo para este pedido,
-    # reflejar automáticamente el estado EN_RUTA en la base de datos y en el portal web.
-    if perfil_rep is not None and pedido.estado in {"PENDIENTE", "PREPARADO"}:
+    # Un pedido solo puede pasar a EN_RUTA si ya está PREPARADO y tiene repartidor con pulso o asignación activa
+    if perfil_rep is not None and pedido.estado == "PREPARADO":
         pulso_activo = (
             perfil_rep.ultima_actualizacion is not None
             and pedido.fecha_creacion is not None
@@ -697,6 +695,10 @@ def pedido_admin_detalle(request: HttpRequest, id_pedido: int) -> HttpResponse:
 
             if nuevo_estado == "CANCELADO" and estado_anterior == "ENTREGADO":
                 messages.error(request, "Un pedido entregado no se puede cancelar desde el portal.")
+                return redirect("tienda:admin-pedido-detalle", id_pedido=pedido_lock.pk)
+
+            if nuevo_estado == "EN_RUTA" and estado_anterior != "PREPARADO":
+                messages.error(request, "El pedido no puede pasar a 'En ruta' hasta que esté marcado como 'Preparado'.")
                 return redirect("tienda:admin-pedido-detalle", id_pedido=pedido_lock.pk)
 
             try:
@@ -1466,6 +1468,30 @@ def accion_pedido(request: HttpRequest, id_pedido: int) -> HttpResponse:
                     )
                 except ValueError as error:
                     messages.error(request, str(error))
+
+        elif accion == "poner_en_ruta":
+            if pedido.estado != "PREPARADO":
+                messages.error(request, "El pedido no puede pasar a 'En ruta' hasta que esté marcado como 'Preparado'.")
+            elif not pedido.id_repartidor_id:
+                messages.error(request, "Debes asignar un repartidor antes de poner el pedido en ruta.")
+            else:
+                pedido.estado = "EN_RUTA"
+                pedido.estado_repartidor = "ACEPTADO"
+                pedido.save(update_fields=["estado", "estado_repartidor"])
+                messages.success(request, f"El pedido {codigo_ref} ha sido puesto en ruta.")
+
+        elif accion == "entregar":
+            if pedido.estado not in {"PREPARADO", "EN_RUTA"}:
+                messages.error(request, "Solo se pueden entregar pedidos preparados o en ruta.")
+            else:
+                pedido.estado = "ENTREGADO"
+                pedido.estado_repartidor = None
+                if pedido.tipo_entrega == "RETIRO" and pedido.estado_pago == "PENDIENTE":
+                    pedido.estado_pago = "PAGADO"
+                pedido.save(update_fields=["estado", "estado_pago", "estado_repartidor"])
+                if pedido.id_repartidor_id:
+                    liberar_repartidor_si_sin_pedidos(pedido.id_repartidor_id, pedido.pk)
+                messages.success(request, f"El pedido {codigo_ref} fue marcado como ENTREGADO.")
 
         else:
             messages.error(request, "La acción solicitada no es válida.")

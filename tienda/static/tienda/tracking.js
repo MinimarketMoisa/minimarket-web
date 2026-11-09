@@ -44,15 +44,22 @@
     CANCELADO: "Cancelado",
   };
 
-  function crearIconoPin(tipo, emoji, rumboGrados) {
+  const MAPA_ICONOS_GOOGLE = {
+    tienda: "storefront",
+    casa: "home",
+    moto: "two_wheeler",
+  };
+
+  function crearIconoPin(tipo, iconoNombre, rumboGrados) {
     const rotacion = Number.isFinite(Number(rumboGrados)) ? Number(rumboGrados) : 0;
     const flechaHtml =
       tipo === "moto"
         ? `<span class="mm-pin-flecha" style="transform: rotate(${rotacion}deg)">▲</span>`
         : "";
+    const icono = iconoNombre || MAPA_ICONOS_GOOGLE[tipo] || "place";
     return L.divIcon({
       className: "mm-leaflet-div-icon",
-      html: `<div class="mm-pin mm-pin-${tipo}"><span>${emoji}</span>${flechaHtml}</div>`,
+      html: `<div class="mm-pin mm-pin-${tipo}"><span class="material-symbols-outlined">${icono}</span>${flechaHtml}</div>`,
       iconSize: [38, 38],
       iconAnchor: [19, 19],
       popupAnchor: [0, -18],
@@ -222,7 +229,7 @@
       const posSuc = [Number(suc.latitud), Number(suc.longitud)];
       if (!markerSucursal) {
         markerSucursal = L.marker(posSuc, {
-          icon: crearIconoPin("tienda", "🏪", 0),
+          icon: crearIconoPin("tienda", "storefront", 0),
         })
           .addTo(map)
           .bindPopup(
@@ -242,7 +249,7 @@
       const posDir = [Number(dir.latitud), Number(dir.longitud)];
       if (!markerDestino) {
         markerDestino = L.marker(posDir, {
-          icon: crearIconoPin("casa", "🏠", 0),
+          icon: crearIconoPin("casa", "home", 0),
         })
           .addTo(map)
           .bindPopup(
@@ -348,13 +355,13 @@
 
     if (!markerRepartidor) {
       markerRepartidor = L.marker(pos, {
-        icon: crearIconoPin("moto", "🛵", rumboFinal),
+        icon: crearIconoPin("moto", "two_wheeler", rumboFinal),
         zIndexOffset: 500,
       })
         .addTo(map)
         .bindPopup("<strong>Repartidor en ruta</strong>");
     } else {
-      markerRepartidor.setIcon(crearIconoPin("moto", "🛵", rumboFinal));
+      markerRepartidor.setIcon(crearIconoPin("moto", "two_wheeler", rumboFinal));
       animarMarcador(markerRepartidor, pos, 850);
     }
 

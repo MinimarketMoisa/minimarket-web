@@ -21,11 +21,13 @@
       <p class="muted text-sm">Creado el {{ pedido.fecha_creacion|date:"d/m/Y H:i" }}</p>
     </div>
     <div class="flex flex-wrap items-center gap-2.5">
-      <a class="button secondary small" href="{% url 'tienda:admin-pedido-documento' pedido.id_pedido %}">
-        🖨️ Comprobante / Orden
+      <a class="button secondary small inline-flex items-center gap-1.5" href="{% url 'tienda:admin-pedido-documento' pedido.id_pedido %}">
+        <span class="material-symbols-outlined text-[16px]">print</span>
+        <span>Comprobante (A4)</span>
       </a>
-      <a class="button secondary small" href="{% url 'tienda:admin-pedido-documento' pedido.id_pedido %}?formato=ticket">
-        🧾 Ticket 80mm
+      <a class="button secondary small inline-flex items-center gap-1.5" href="{% url 'tienda:admin-pedido-documento' pedido.id_pedido %}?formato=ticket">
+        <span class="material-symbols-outlined text-[16px]">receipt_long</span>
+        <span>Ticket (80mm)</span>
       </a>
       <span id="mm-pedido-estado-badge" class="badge {{ pedido.estado|lower }} text-sm px-3.5 py-1.5">{{ pedido.get_estado_display }}</span>
     </div>
@@ -145,9 +147,9 @@
 
       <div id="mm-tracking-map" class="mm-tracking-map"></div>
       <div class="mt-2.5 flex flex-wrap items-center gap-4 text-xs text-mm-muted">
-        <span>🏪 <strong class="text-mm-ink">Sucursal:</strong> {{ pedido.id_sucursal.nombre }}</span>
-        <span>🛵 <strong class="text-mm-ink">Repartidor:</strong> Actualización automática cada 25 segundos</span>
-        <span>🏠 <strong class="text-mm-ink">Destino:</strong> {% if direccion %}{{ direccion.detalle_direccion }}{% else %}Dirección del cliente{% endif %}</span>
+        <span class="inline-flex items-center gap-1.5"><span class="material-symbols-outlined text-[16px] text-mm-green-dark">storefront</span> <strong class="text-mm-ink">Sucursal:</strong> {{ pedido.id_sucursal.nombre }}</span>
+        <span class="inline-flex items-center gap-1.5"><span class="material-symbols-outlined text-[16px] text-[#0284c7]">two_wheeler</span> <strong class="text-mm-ink">Repartidor:</strong> Actualización automática cada 25 segundos</span>
+        <span class="inline-flex items-center gap-1.5"><span class="material-symbols-outlined text-[16px] text-mm-orange">home</span> <strong class="text-mm-ink">Destino:</strong> {% if direccion %}{{ direccion.detalle_direccion }}{% else %}Dirección del cliente{% endif %}</span>
       </div>
     </section>
 
@@ -162,7 +164,7 @@
         estadoInicial: {{ seguimiento_inicial_json|safe }}
       };
     </script>
-    <script src="{% static 'tienda/tracking.js' %}?v=20261109_esri"></script>
+    <script src="{% static 'tienda/tracking.js' %}?v=20261109_icons"></script>
   {% endif %}
 
   <section class="panel">

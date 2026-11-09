@@ -201,6 +201,11 @@ class PedidoPortalForm(forms.Form):
             self.add_error("id_repartidor", "Los pedidos para retiro no llevan repartidor.")
         if self.pedido.estado == "CANCELADO" and estado != "CANCELADO":
             self.add_error("estado", "Los pedidos cancelados se conservan en el historial.")
+        if estado == "EN_RUTA":
+            if self.pedido.estado != "PREPARADO":
+                self.add_error("estado", "Un pedido no puede estar en ruta hasta que esté marcado como Preparado.")
+            if not repartidor and not self.pedido.id_repartidor_id:
+                self.add_error("id_repartidor", "Debes asignar un repartidor para poder poner el pedido en ruta.")
         return cleaned_data
 
 
