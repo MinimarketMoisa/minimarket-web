@@ -47,4 +47,118 @@
       </div>
     </form>
   </section>
+
+  <!-- Modal de confirmación para cambio de rol -->
+  <div id="modal-confirm-rol" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm hidden" style="display: none;">
+    <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-mm-line mx-4">
+      <div class="flex items-center gap-3 mb-3 text-amber-600">
+        <span class="material-symbols-outlined text-3xl">warning</span>
+        <h3 class="text-lg font-bold text-mm-ink">¿Estás seguro?</h3>
+      </div>
+      <p class="text-sm text-mm-muted mb-6 leading-relaxed" id="modal-confirm-msg">
+        ¿Estás seguro de que deseas cambiar el rol de este usuario?
+      </p>
+      <div class="flex justify-end gap-3">
+        <button type="button" id="btn-cancel-rol-modal" class="button secondary text-sm">Cancelar</button>
+        <button type="button" id="btn-confirm-rol-modal" class="button primary text-sm">Sí, cambiar rol</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const rolField = document.getElementById('id_rol');
+      if (!rolField) return;
+
+      // Si el campo está deshabilitado (administrador editando su propio perfil)
+      if (rolField.disabled) {
+        rolField.classList.add('opacity-75', 'cursor-not-allowed', 'bg-gray-100');
+        return;
+      }
+
+      const modal = document.getElementById('modal-confirm-rol');
+      const msg = document.getElementById('modal-confirm-msg');
+      const btnConfirm = document.getElementById('btn-confirm-rol-modal');
+      const btnCancel = document.getElementById('btn-cancel-rol-modal');
+      const form = rolField.closest('form');
+
+      const initialRolId = rolField.value;
+      const initialRolText = rolField.options[rolField.selectedIndex] ? rolField.options[rolField.selectedIndex].text.trim() : '';
+      let lastConfirmedValue = initialRolId;
+      let pendingValue = initialRolId;
+      let onConfirmCallback = null;
+
+      function openModal(text, onConfirm, onCancel) {
+        if (!modal) {
+          if (confirm(text)) {
+            if (onConfirm) onConfirm();
+          } else {
+            if (onCancel) onCancel();
+          }
+          return;
+        }
+        msg.textContent = text;
+        modal.style.display = 'flex';
+        modal.classList.remove('hidden');
+
+        onConfirmCallback = function () {
+          closeModal();
+          if (onConfirm) onConfirm();
+        };
+
+        btnCancel.onclick = function () {
+          closeModal();
+          if (onCancel) onCancel();
+        };
+
+        btnConfirm.onclick = onConfirmCallback;
+      }
+
+      function closeModal() {
+        if (modal) {
+          modal.style.display = 'none';
+          modal.classList.add('hidden');
+        }
+      }
+
+      rolField.addEventListener('change', function () {
+        if (rolField.value !== initialRolId && rolField.value !== '') {
+          pendingValue = rolField.value;
+          const newRolText = rolField.options[rolField.selectedIndex] ? rolField.options[rolField.selectedIndex].text.trim() : '';
+          const confirmText = `¿Estás seguro de que deseas cambiar el rol de este usuario de ${initialRolText || 'rol actual'} a ${newRolText}?`;
+
+          openModal(
+            confirmText,
+            function () {
+              lastConfirmedValue = pendingValue;
+            },
+            function () {
+              rolField.value = lastConfirmedValue;
+            }
+          );
+        } else {
+          lastConfirmedValue = rolField.value;
+        }
+      });
+
+      if (form) {
+        form.addEventListener('submit', function (e) {
+          if (rolField.value !== initialRolId && rolField.value !== '' && rolField.value !== lastConfirmedValue) {
+            e.preventDefault();
+            const newRolText = rolField.options[rolField.selectedIndex] ? rolField.options[rolField.selectedIndex].text.trim() : '';
+            openModal(
+              `¿Estás seguro de que deseas guardar este usuario con el nuevo rol de ${newRolText}?`,
+              function () {
+                lastConfirmedValue = rolField.value;
+                form.submit();
+              },
+              function () {
+                // Cancelado
+              }
+            );
+          }
+        });
+      }
+    });
+  </script>
 {% endblock %}

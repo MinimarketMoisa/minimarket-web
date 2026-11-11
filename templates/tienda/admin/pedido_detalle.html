@@ -176,6 +176,11 @@
     </div>
     {% if pedido.estado == "CANCELADO" %}
       <p class="muted text-sm">Este pedido cancelado se conserva en el historial y no se puede reactivar.</p>
+    {% elif pedido.estado == "EN_RUTA" %}
+      <div class="mb-3 flex items-center gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm font-medium text-amber-800">
+        <span class="material-symbols-outlined text-lg text-amber-600">local_shipping</span>
+        <span>El pedido está en ruta con <strong>{{ pedido.id_repartidor.id_repartidor.nombre_completo|default:"el repartidor asignado" }}</strong>. Su estado y repartidor están protegidos y no pueden modificarse hasta que el repartidor complete la entrega.</span>
+      </div>
     {% endif %}
     <form method="post" class="form-stack mt-3" novalidate>
       {% csrf_token %}
@@ -189,6 +194,7 @@
           <div class="field">
             {{ field.label_tag }}
             {{ field }}
+            {% if field.help_text %}<span class="text-xs text-mm-muted mt-1 block">{{ field.help_text }}</span>{% endif %}
             {% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
           </div>
         {% endfor %}

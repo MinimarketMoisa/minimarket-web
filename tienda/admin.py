@@ -129,6 +129,12 @@ class UsuarioAdmin(UserAdmin):
     filter_horizontal = ()
     readonly_fields = ("last_login",)
 
+    def get_readonly_fields(self, request, obj=None):
+        ro = list(super().get_readonly_fields(request, obj))
+        if obj and request.user and obj.pk == request.user.pk:
+            ro.append("id_rol")
+        return tuple(ro)
+
     fieldsets = (
         (None, {"fields": ("email", "password")}),
         ("Información personal", {"fields": ("nombre_completo", "telefono", "id_rol")}),
@@ -159,6 +165,10 @@ class UsuarioAdmin(UserAdmin):
     )
 
     def save_model(self, request, obj, form, change):
+        # Un administrador no puede cambiar su propio rol
+        if change and request.user and obj.pk == request.user.pk and "id_rol" in form.changed_data:
+            obj.id_rol = Usuario.objects.get(pk=obj.pk).id_rol
+
         # Sincronizar permisos internos de Django con el rol de negocio
         if obj.id_rol:
             rol_nombre = obj.id_rol.nombre
@@ -251,6 +261,12 @@ class PedidoAdmin(admin.ModelAdmin):
     inlines = [DetallePedidoInline]
     date_hierarchy = "fecha_creacion"
 
+    def get_readonly_fields(self, request, obj=None):
+        ro = list(super().get_readonly_fields(request, obj))
+        if obj and obj.estado == "EN_RUTA":
+            ro.extend(["estado", "id_repartidor"])
+        return tuple(ro)
+
     @admin.display(description="Total")
     def subtotal_calculado(self, obj):
         return obj.total
@@ -262,6 +278,11 @@ class PedidoAdmin(admin.ModelAdmin):
                 if change
                 else None
             )
+            if change and pedido_anterior and pedido_anterior.estado == "EN_RUTA":
+                if obj.estado != "EN_RUTA":
+                    obj.estado = "EN_RUTA"
+                if obj.id_repartidor != pedido_anterior.id_repartidor:
+                    obj.id_repartidor = pedido_anterior.id_repartidor
             se_cancela = (
                 pedido_anterior is not None
                 and pedido_anterior.estado != "CANCELADO"

@@ -693,6 +693,14 @@ def pedido_admin_detalle(request: HttpRequest, id_pedido: int) -> HttpResponse:
             nuevo_estado_pago = form.cleaned_data["estado_pago"]
             nuevo_repartidor = form.cleaned_data["id_repartidor"]
 
+            if estado_anterior == "EN_RUTA":
+                if nuevo_estado != "EN_RUTA":
+                    messages.error(request, "El pedido está en ruta. No se puede modificar el estado hasta que el repartidor complete la entrega.")
+                    return redirect("tienda:admin-pedido-detalle", id_pedido=pedido_lock.pk)
+                if nuevo_repartidor != pedido_lock.id_repartidor:
+                    messages.error(request, "El pedido está en ruta. No se puede reasignar el repartidor durante la entrega.")
+                    return redirect("tienda:admin-pedido-detalle", id_pedido=pedido_lock.pk)
+
             if nuevo_estado == "CANCELADO" and estado_anterior == "ENTREGADO":
                 messages.error(request, "Un pedido entregado no se puede cancelar desde el portal.")
                 return redirect("tienda:admin-pedido-detalle", id_pedido=pedido_lock.pk)
@@ -1204,7 +1212,7 @@ def usuarios_admin(request: HttpRequest) -> HttpResponse:
 @require_http_methods(["GET", "POST"])
 def usuario_admin_form(request: HttpRequest, id_usuario=None) -> HttpResponse:
     instance = get_object_or_404(Usuario, pk=id_usuario) if id_usuario else None
-    form = UsuarioPortalForm(request.POST or None, instance=instance)
+    form = UsuarioPortalForm(request.POST or None, instance=instance, current_user=request.user)
     if request.method == "POST" and form.is_valid():
         with transaction.atomic():
             form.save()
@@ -1447,6 +1455,9 @@ def accion_pedido(request: HttpRequest, id_pedido: int) -> HttpResponse:
                 messages.success(request, f"El pago del pedido {codigo_ref} fue confirmado.")
 
         elif accion == "cancelar":
+            if pedido.estado == "EN_RUTA":
+                messages.error(request, "El pedido está en ruta con el repartidor. No se puede cancelar hasta que se reporte la entrega o incidencia.")
+                return redirect("tienda:pedido-detalle", id_pedido=id_pedido)
             cancelar_pedido(pedido)
             messages.success(
                 request,
@@ -1455,6 +1466,9 @@ def accion_pedido(request: HttpRequest, id_pedido: int) -> HttpResponse:
             return redirect("tienda:pedidos")
 
         elif accion == "asignar_repartidor":
+            if pedido.estado == "EN_RUTA":
+                messages.error(request, "No se puede reasignar un pedido que ya está en ruta.")
+                return redirect("tienda:pedido-detalle", id_pedido=id_pedido)
             nuevo_id = request.POST.get("id_repartidor", "").strip()
             if not nuevo_id or not nuevo_id.isdecimal():
                 messages.error(request, "Selecciona un repartidor disponible.")
@@ -1481,8 +1495,11 @@ def accion_pedido(request: HttpRequest, id_pedido: int) -> HttpResponse:
                 messages.success(request, f"El pedido {codigo_ref} ha sido puesto en ruta.")
 
         elif accion == "entregar":
-            if pedido.estado not in {"PREPARADO", "EN_RUTA"}:
-                messages.error(request, "Solo se pueden entregar pedidos preparados o en ruta.")
+            if pedido.estado == "EN_RUTA":
+                messages.error(request, "El pedido está en ruta. Solo el repartidor asignado puede marcarlo como entregado.")
+                return redirect("tienda:pedido-detalle", id_pedido=id_pedido)
+            if pedido.estado != "PREPARADO":
+                messages.error(request, "Solo se pueden entregar pedidos preparados.")
             else:
                 pedido.estado = "ENTREGADO"
                 pedido.estado_repartidor = None

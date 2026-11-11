@@ -193,15 +193,32 @@ class PedidoPortalForm(forms.Form):
         self.initial.setdefault("estado_pago", pedido.estado_pago)
         self.initial.setdefault("id_repartidor", pedido.id_repartidor_id)
 
+        if pedido.estado == "EN_RUTA":
+            self.fields["estado"].disabled = True
+            self.fields["estado"].help_text = (
+                "El pedido está en ruta. No se puede modificar hasta que el repartidor complete la entrega."
+            )
+            self.fields["id_repartidor"].disabled = True
+            self.fields["id_repartidor"].help_text = (
+                "Repartidor en trayecto; no se puede reasignar durante la ruta."
+            )
+
     def clean(self):
         cleaned_data = super().clean()
         estado = cleaned_data.get("estado")
         repartidor = cleaned_data.get("id_repartidor")
+
+        if self.pedido.estado == "EN_RUTA":
+            cleaned_data["estado"] = "EN_RUTA"
+            cleaned_data["id_repartidor"] = self.pedido.id_repartidor
+            if estado and estado != "EN_RUTA":
+                self.add_error("estado", "El pedido está en ruta. No se puede modificar hasta que el repartidor complete la entrega.")
+
         if self.pedido.tipo_entrega == "RETIRO" and repartidor:
             self.add_error("id_repartidor", "Los pedidos para retiro no llevan repartidor.")
         if self.pedido.estado == "CANCELADO" and estado != "CANCELADO":
             self.add_error("estado", "Los pedidos cancelados se conservan en el historial.")
-        if estado == "EN_RUTA":
+        if estado == "EN_RUTA" and self.pedido.estado != "EN_RUTA":
             if self.pedido.estado != "PREPARADO":
                 self.add_error("estado", "Un pedido no puede estar en ruta hasta que esté marcado como Preparado.")
             if not repartidor and not self.pedido.id_repartidor_id:
@@ -232,10 +249,10 @@ class UsuarioPortalForm(forms.Form):
         queryset=Sucursal.objects.order_by("nombre"),
         required=False,
     )
-    cargo = forms.CharField(label="Cargo", max_length=50, required=False)
 
-    def __init__(self, *args, instance=None, **kwargs):
+    def __init__(self, *args, instance=None, current_user=None, **kwargs):
         self.instance = instance
+        self.current_user = current_user
         super().__init__(*args, **kwargs)
         if instance is not None:
             perfil = Empleado.objects.filter(pk=instance.pk).first()
@@ -248,9 +265,12 @@ class UsuarioPortalForm(forms.Form):
                     "activo": instance.activo,
                     "email_verificado": instance.email_verificado,
                     "sucursal": perfil.id_sucursal_id if perfil else None,
-                    "cargo": perfil.cargo if perfil else "",
                 }
             )
+            # Un administrador no puede cambiar su propio rol
+            if current_user and instance.pk == current_user.pk:
+                self.fields["rol"].disabled = True
+                self.fields["rol"].help_text = "Como administrador no puedes cambiar tu propio rol."
         else:
             self.fields["password"].required = True
 
@@ -265,15 +285,16 @@ class UsuarioPortalForm(forms.Form):
 
     def clean(self):
         cleaned_data = super().clean()
+        # Si es el propio usuario administrador, asegurar que el rol no sea modificado
+        if self.instance and self.current_user and self.instance.pk == self.current_user.pk:
+            cleaned_data["rol"] = self.instance.id_rol
+
         rol = cleaned_data.get("rol")
         if rol and rol.nombre == "EMPLEADO":
             if not cleaned_data.get("sucursal"):
                 self.add_error("sucursal", "Selecciona la sucursal asignada al empleado.")
-            if not cleaned_data.get("cargo"):
-                self.add_error("cargo", "Indica el cargo del empleado.")
         elif rol:
             cleaned_data["sucursal"] = None
-            cleaned_data["cargo"] = ""
         return cleaned_data
 
     def save(self):
@@ -298,11 +319,13 @@ class UsuarioPortalForm(forms.Form):
         usuario.save()
 
         if rol_nombre == "EMPLEADO":
+            perfil = Empleado.objects.filter(pk=usuario.pk).first()
+            cargo_actual = perfil.cargo if (perfil and perfil.cargo) else "Empleado"
             Empleado.objects.update_or_create(
                 id_empleado=usuario,
                 defaults={
                     "id_sucursal": data["sucursal"],
-                    "cargo": data["cargo"],
+                    "cargo": cargo_actual,
                 },
             )
         elif rol_nombre == "REPARTIDOR":

@@ -187,12 +187,12 @@
       </div>
     </div>
     {% if pedido.estado == "EN_RUTA" %}
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <p class="muted text-sm m-0">Este pedido se encuentra <strong>En ruta</strong> con el repartidor asignado. Puedes monitorear su ubicación en tiempo real en el mapa.</p>
-        <form method="post" action="{% url 'tienda:pedido-accion' pedido.id_pedido %}">
-          {% csrf_token %}<input type="hidden" name="accion" value="entregar">
-          <button class="button primary" type="submit">✓ Marcar como entregado</button>
-        </form>
+      <div class="flex items-center gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
+        <span class="material-symbols-outlined text-2xl text-amber-600">local_shipping</span>
+        <div class="text-sm">
+          <p class="font-semibold m-0">Pedido en ruta con {{ pedido.id_repartidor.id_repartidor.nombre_completo|default:"el repartidor asignado" }}</p>
+          <p class="text-amber-700 m-0">Este pedido no se puede modificar desde el portal. Solo el repartidor asignado puede registrar la entrega al completarla.</p>
+        </div>
       </div>
     {% else %}
       <div class="actions-grid">
